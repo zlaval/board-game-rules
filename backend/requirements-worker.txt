@@ -1,0 +1,4 @@
+-r requirements.txt
+docling==2.135.0
+onnxruntime==1.30.0
+

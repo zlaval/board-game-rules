@@ -1,0 +1,13 @@
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HF_HOME=/models/huggingface DOCLING_CACHE_DIR=/models/docling OMP_NUM_THREADS=2
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY backend/requirements*.txt ./
+RUN pip install --no-cache-dir torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements-worker.txt
+COPY backend/app ./app
+COPY backend/scripts ./scripts
+RUN useradd --uid 10001 --create-home rules && mkdir /data /models && chown rules:rules /data /models
+USER rules
+CMD ["python", "-m", "app.worker"]
+

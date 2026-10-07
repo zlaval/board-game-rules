@@ -1,0 +1,108 @@
+name: board-game-rules
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Run setup first}@postgres:5432/rules
+  DATA_DIR: /data
+  ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup first}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+  MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: rules
+      POSTGRES_USER: rules
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup first}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rules -d rules"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    environment: *app-environment
+    volumes:
+      - documents:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    init: true
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    environment: *app-environment
+    volumes:
+      - documents:/data
+      - models:/models
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.frontend
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tests:
+    profiles: ["test"]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.test
+    environment:
+      <<: *app-environment
+      DATA_DIR: /tmp/test-data
+    depends_on:
+      api:
+        condition: service_healthy
+
+  e2e:
+    profiles: ["e2e"]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.e2e
+    environment:
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup first}
+      BASE_URL: http://frontend
+    volumes:
+      - ../test-results:/results
+    depends_on:
+      frontend:
+        condition: service_started
+      worker:
+        condition: service_started
+    init: true
+    shm_size: 256mb
+
+
+volumes:
+  database:
+  documents:
+  models:
+

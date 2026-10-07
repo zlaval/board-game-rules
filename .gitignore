@@ -1,0 +1,11 @@
+infra/.env
+node_modules/
+frontend/dist/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.pyc
+.DS_Store
+test-results/
+
