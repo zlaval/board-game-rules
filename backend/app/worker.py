@@ -24,7 +24,7 @@ def claim():
         ).fetchall()
         for row in exhausted:
             db.execute(
-                "UPDATE versions SET status='failed',stage='Megszakadt feldolgozás',error='A feldolgozó többször megszakadt. Indítsd újra a feldolgozást.',finished_at=now() WHERE id=%s",
+                "UPDATE versions SET status='failed',stage='interrupted',error='worker_interrupted',finished_at=now() WHERE id=%s",
                 (row["version_id"],),
             )
         job = db.execute(
@@ -38,7 +38,7 @@ def claim():
             (token, job["id"]),
         )
         db.execute(
-            "UPDATE versions SET status='processing',stage='Feldolgozás indítása',progress=5,error=NULL WHERE id=%s",
+            "UPDATE versions SET status='processing',stage='starting',progress=5,error=NULL WHERE id=%s",
             (job["version_id"],),
         )
         document = db.execute(
@@ -71,7 +71,7 @@ def fail(job, message):
         ).fetchone()
         if owned:
             db.execute(
-                "UPDATE versions SET status='failed',stage='Sikertelen feldolgozás',error=%s,finished_at=now() WHERE id=%s",
+                "UPDATE versions SET status='failed',stage='failed',error=%s,finished_at=now() WHERE id=%s",
                 (message[:1000], job["version_id"]),
             )
 
@@ -118,7 +118,7 @@ def complete(job, manifest, relative_output):
                 ],
             )
         db.execute(
-            "UPDATE versions SET status='ready',stage='Ellenőrzésre kész',progress=100,page_count=%s,character_count=%s,processor=%s,finished_at=now() WHERE id=%s",
+            "UPDATE versions SET status='ready',stage='ready',progress=100,page_count=%s,character_count=%s,processor=%s,finished_at=now() WHERE id=%s",
             (manifest["page_count"], manifest["character_count"], manifest["processor"], version),
         )
         db.execute("UPDATE jobs SET state='done',lease_until=NULL WHERE id=%s", (job["id"],))
@@ -152,11 +152,11 @@ def run_job(job):
                 if time.monotonic() - started > 1800:
                     fail(
                         job,
-                        "A feldolgozás túllépte a 30 perces időkorlátot. Bontsd kisebb dokumentumokra az anyagot.",
+                        "processing_timeout",
                     )
                     return
                 if time.monotonic() >= next_heartbeat:
-                    state = {"stage": "Dokumentumfeldolgozás", "progress": 10}
+                    state = {"stage": "processing", "progress": 10}
                     try:
                         state = json.loads((output / "progress.json").read_text(encoding="utf-8"))
                     except (FileNotFoundError, json.JSONDecodeError):
@@ -170,7 +170,7 @@ def run_job(job):
                 log.error("Job %s failed: %s", job["id"], detail[-2000:])
                 fail(
                     job,
-                    "Nem sikerült feldolgozni a dokumentumot. Ellenőrizd a fájlt, az oldalkorlátot és a worker naplóját. A modellek első letöltéséhez internet szükséges.",
+                    "processing_failed",
                 )
                 return
             manifest = json.loads((output / "result.json").read_text(encoding="utf-8"))

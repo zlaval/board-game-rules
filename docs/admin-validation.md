@@ -53,3 +53,14 @@ Az alkalmazás helyi fejlesztői HTTP-elérése `http://localhost:8080`. A Proxm
 - 24 backendteszt: sikeres. Az új esetek a CUDA kernelpróbát, GPU-hiányt/hibát, CPU-kényszerítést, egyszeri fallbacket, CPU-hiba továbbadását, sérült cache javítását, checksum-ellenőrzést és atomikus letöltést ellenőrzik.
 - Ruff ellenőrzés, PowerShell és Linux shell indítószintaxis: sikeres. A PowerShell indító ténylegesen GPU-val indította az alkalmazást.
 
+## Angol és magyar nyelv
+
+- Az alapértelmezett README angol; a `README.hu.md` magyar. Mindkettő rövid összefoglalóval kezdődik, funkciólistával és bemutatással folytatódik, majd részletes futtatási útmutatót ad.
+- Az adminfelület alapértelmezett nyelve angol, magyar böngészőbeállítás mellett is. A belépésnél, az adminfejlécben és a párbeszédablakokban is választható magyar; a választást a böngésző megjegyzi.
+- A feliratok, súgók, hozzáférhetőségi címkék, ellenőrző üzenetek, hibák és feldolgozási állapotok két nyelven jelennek meg. Az API az `Accept-Language` fejlécet használja, és stabil állapot- és hibakódokat is visszaad.
+- Nyelvváltáskor megmaradnak a kitöltött űrlapok, a szabálykönyv nyelvi adatai és az eredeti szabályszöveg. A már látható hibaüzenetek azonnal nyelvet váltanak. A korábbi magyar feldolgozási állapotok is fordíthatók.
+- 29 backendteszt és a TypeScript/Vite build sikeres. Az új tesztek a nyelvválasztást, az API-hibákat, a feldolgozási üzeneteket, a régi állapotokat és az eredeti szöveg megőrzését ellenőrzik.
+- Chromiumban a teljes adminfolyamat mindkét nyelven sikeres, JavaScript-hiba nélkül. A 390 × 844-es mobilnézetben nincs vízszintes túlcsordulás. Képernyőképek: `test-results/admin-desktop-en.png`, `admin-mobile-en.png`, `admin-mobile-hu.png`, `admin-preview-hu.png`, `login-hu.png`.
+- A végleges API és worker mellett az új PDF- és PNG-próba is sikeres: mindkettő `cuda:0` / `torch` eszközzel futott, CPU-fallback nélkül; a PDF két eredeti ábrája és a forrásoldalak megmaradtak.
+- Az ellenőrzésekhez létrehozott saját próba-játékokat és dokumentumokat célzottan eltávolítottuk.
+

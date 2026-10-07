@@ -11,14 +11,17 @@ from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from . import config
 from .db import connect
 from .storage import storage_path
+from .i18n import api_error, error_response, localize_version, request_language
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +36,26 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title="Szabálytár admin API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="RuleShelf admin API", version="0.1.0", lifespan=lifespan)
 login_attempts = defaultdict(deque)
 login_lock = threading.Lock()
+
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_http_error(request, exception):
+    detail = exception.detail if isinstance(exception.detail, dict) else {}
+    return error_response(
+        request,
+        exception.status_code,
+        detail.get("code", "request_failed"),
+        detail.get("params"),
+        exception.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def localized_validation_error(request, exception):
+    return error_response(request, 422, "validation_error")
 
 
 @app.middleware("http")
@@ -43,12 +63,12 @@ async def same_origin(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
         if origin and urlsplit(origin).netloc != request.headers.get("host"):
-            return JSONResponse(
-                {"detail": "Eltérő eredetű kérés nem engedélyezett."}, status_code=403
-            )
+            return error_response(request, 403, "cross_origin")
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Language"] = request_language(request)
+    response.headers["Vary"] = "Accept-Language"
     return response
 
 
@@ -64,7 +84,7 @@ def require_admin(request: Request):
             (token_hash(token),),
         ).fetchone()
     if not session:
-        raise HTTPException(401, "Jelentkezz be az adminfelület használatához.")
+        raise api_error(401, "auth_required")
 
 
 Admin = Annotated[None, Depends(require_admin)]
@@ -79,20 +99,20 @@ class GameInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=150)
     edition: str = Field(default="", max_length=150)
-    language: str = Field(default="hu", pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
+    language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
     description: str = Field(default="", max_length=3000)
 
 
 class TextInput(BaseModel):
     title: str = Field(default="szabaly.md", min_length=1, max_length=200)
     content: str = Field(min_length=1, max_length=2_000_000)
-    language: str = Field(default="hu", pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
+    language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
 
     @field_validator("content")
     @classmethod
     def not_blank(cls, value):
         if not value.strip():
-            raise ValueError("A szabály szövege nem lehet üres.")
+            raise ValueError("Rule text must not be empty.")
         return value
 
 
@@ -115,14 +135,14 @@ def login(body: Login, request: Request, response: Response):
         while attempts and attempts[0] < now - 60:
             attempts.popleft()
         if len(attempts) >= 10:
-            raise HTTPException(429, "Túl sok belépési kísérlet. Próbáld újra egy perc múlva.")
+            raise api_error(429, "login_rate_limit")
     if not (
         hmac.compare_digest(body.username.encode(), config.ADMIN_USERNAME.encode())
         & hmac.compare_digest(body.password.encode(), config.ADMIN_PASSWORD.encode())
     ):
         with login_lock:
             attempts.append(now)
-        raise HTTPException(401, "Hibás felhasználónév vagy jelszó.")
+        raise api_error(401, "bad_credentials")
     token = secrets.token_urlsafe(32)
     with connect() as db:
         db.execute("DELETE FROM sessions WHERE expires_at < now()")
@@ -190,13 +210,13 @@ def edit_game(game_id: UUID, body: GameInput, admin: Admin):
             (body.title, body.edition, body.language, body.description, game_id),
         ).fetchone()
         if not row:
-            raise HTTPException(404, "A játék nem található.")
+            raise api_error(404, "game_not_found")
         return row
 
 
 def ensure_game(db, game_id):
     if not db.execute("SELECT 1 FROM games WHERE id=%s", (game_id,)).fetchone():
-        raise HTTPException(404, "A játék nem található.")
+        raise api_error(404, "game_not_found")
 
 
 DOCUMENT_QUERY = """
@@ -213,17 +233,18 @@ FROM documents d LEFT JOIN LATERAL
 
 
 @app.get("/api/games/{game_id}/documents")
-def documents(game_id: UUID, admin: Admin):
+def documents(game_id: UUID, request: Request, admin: Admin):
     with connect() as db:
         ensure_game(db, game_id)
-        return db.execute(
+        rows = db.execute(
             DOCUMENT_QUERY + " WHERE d.game_id=%s ORDER BY d.created_at DESC", (game_id,)
         ).fetchall()
+        return [localize_version(row, request_language(request)) for row in rows]
 
 
 def save_document(game_id, filename, extension, language, content):
     if not content or not content.strip() and extension in {"txt", "md"}:
-        raise HTTPException(400, "Üres dokumentum nem tölthető fel.")
+        raise api_error(400, "empty_document")
     digest = hashlib.sha256(content).hexdigest()
     document_id = uuid4()
     relative = f"sources/{document_id}.{extension}"
@@ -249,7 +270,7 @@ def save_document(game_id, filename, extension, language, content):
         return row
     except UniqueViolation:
         path.unlink(missing_ok=True)
-        raise HTTPException(409, "Ezt a dokumentumot már feltöltötted ehhez a játékhoz.")
+        raise api_error(409, "duplicate_document")
     except Exception:
         path.unlink(missing_ok=True)
         raise
@@ -260,26 +281,24 @@ def upload_document(
     game_id: UUID,
     admin: Admin,
     file: Annotated[UploadFile, File()],
-    language: Annotated[str, Form(pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")] = "hu",
+    language: Annotated[str, Form(pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")] = "en",
 ):
     filename = (file.filename or "document").replace("\\", "/").rsplit("/", 1)[-1][:200]
     extension = Path(filename).suffix.lower().lstrip(".")
     if extension not in {"pdf", "txt", "md", "png", "jpg", "jpeg", "webp"}:
-        raise HTTPException(415, "PDF, TXT, Markdown, PNG, JPG vagy WebP fájlt válassz.")
+        raise api_error(415, "unsupported_file")
     content = bytearray()
     while block := file.file.read(1024 * 1024):
         content.extend(block)
         if len(content) > config.MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                413, f"A fájl legfeljebb {config.MAX_UPLOAD_BYTES // 1024 // 1024} MB lehet."
-            )
+            raise api_error(413, "file_too_large", limit=config.MAX_UPLOAD_BYTES // 1024 // 1024)
     if extension == "pdf" and not bytes(content[:1024]).lstrip().startswith(b"%PDF-"):
-        raise HTTPException(400, "A fájl nem érvényes PDF.")
+        raise api_error(400, "invalid_pdf")
     if extension in {"txt", "md"}:
         try:
             bytes(content).decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise HTTPException(400, "A szöveges fájlt UTF-8 kódolással mentsd el.")
+            raise api_error(400, "invalid_encoding")
     return save_document(game_id, filename, extension, language, bytes(content))
 
 
@@ -290,7 +309,7 @@ def upload_text(game_id: UUID, body: TextInput, admin: Admin):
         filename += ".md"
     content = body.content.encode("utf-8")
     if len(content) > config.MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "Túl hosszú szabályszöveg.")
+        raise api_error(413, "text_too_long")
     return save_document(game_id, filename, "md", body.language, content)
 
 
@@ -301,27 +320,30 @@ def process_document(document_id: UUID, admin: Admin):
             "SELECT id FROM documents WHERE id=%s FOR UPDATE", (document_id,)
         ).fetchone()
         if not document:
-            raise HTTPException(404, "A dokumentum nem található.")
+            raise api_error(404, "document_not_found")
         active = db.execute(
             "SELECT id FROM versions WHERE document_id=%s AND status IN ('queued','processing')",
             (document_id,),
         ).fetchone()
         if active:
-            raise HTTPException(409, "A dokumentum feldolgozása már folyamatban van.")
+            raise api_error(409, "processing_active")
         version_id = uuid4()
-        db.execute("INSERT INTO versions(id,document_id) VALUES (%s,%s)", (version_id, document_id))
+        db.execute(
+            "INSERT INTO versions(id,document_id,stage) VALUES (%s,%s,'queued')",
+            (version_id, document_id),
+        )
         db.execute("INSERT INTO jobs(id,version_id) VALUES (%s,%s)", (uuid4(), version_id))
         return {"version_id": version_id, "status": "queued"}
 
 
 @app.get("/api/versions/{version_id}/preview")
-def preview(version_id: UUID, admin: Admin, q: str = "", offset: int = 0):
+def preview(version_id: UUID, request: Request, admin: Admin, q: str = "", offset: int = 0):
     if len(q) > 200 or offset < 0:
-        raise HTTPException(400, "Érvénytelen keresés vagy lapozás.")
+        raise api_error(400, "invalid_search")
     with connect() as db:
         version = db.execute("SELECT * FROM versions WHERE id=%s", (version_id,)).fetchone()
         if not version:
-            raise HTTPException(404, "A feldolgozott változat nem található.")
+            raise api_error(404, "version_not_found")
         if q.strip():
             chunks = db.execute(
                 "SELECT id,ordinal,heading,content,page,source_ref FROM chunks WHERE version_id=%s AND search_vector @@ websearch_to_tsquery('simple',%s) ORDER BY ts_rank(search_vector,websearch_to_tsquery('simple',%s)) DESC,ordinal LIMIT 50 OFFSET %s",
@@ -338,7 +360,12 @@ def preview(version_id: UUID, admin: Admin, q: str = "", offset: int = 0):
         count = db.execute(
             "SELECT count(*)::int AS n FROM chunks WHERE version_id=%s", (version_id,)
         ).fetchone()["n"]
-        return {"version": version, "chunks": chunks, "assets": assets, "total_chunks": count}
+        return {
+            "version": localize_version(version, request_language(request)),
+            "chunks": chunks,
+            "assets": assets,
+            "total_chunks": count,
+        }
 
 
 @app.post("/api/versions/{version_id}/publish")
@@ -346,13 +373,13 @@ def publish(version_id: UUID, admin: Admin):
     with connect() as db:
         row = db.execute("SELECT document_id FROM versions WHERE id=%s", (version_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "A változat nem található.")
+            raise api_error(404, "version_not_found")
         db.execute("SELECT id FROM documents WHERE id=%s FOR UPDATE", (row["document_id"],))
         version = db.execute(
             "SELECT status FROM versions WHERE id=%s FOR UPDATE", (version_id,)
         ).fetchone()
         if version["status"] not in {"ready", "published"}:
-            raise HTTPException(409, "Csak sikeresen feldolgozott változat tehető közzé.")
+            raise api_error(409, "publish_not_ready")
         db.execute(
             "UPDATE versions SET status='ready', published_at=NULL WHERE document_id=%s AND status='published' AND id<>%s",
             (row["document_id"], version_id),
@@ -370,7 +397,7 @@ def source(document_id: UUID, admin: Admin):
             "SELECT source_path,filename FROM documents WHERE id=%s", (document_id,)
         ).fetchone()
     if not row:
-        raise HTTPException(404, "A dokumentum nem található.")
+        raise api_error(404, "document_not_found")
     return FileResponse(storage_path(row["source_path"]), filename=row["filename"])
 
 
@@ -379,5 +406,5 @@ def asset(asset_id: UUID, admin: Admin):
     with connect() as db:
         row = db.execute("SELECT path FROM assets WHERE id=%s", (asset_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "Az ábra nem található.")
+        raise api_error(404, "asset_not_found")
     return FileResponse(storage_path(row["path"]), media_type="image/png")

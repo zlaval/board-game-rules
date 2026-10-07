@@ -1,3 +1,10 @@
+import {
+  useI18n,
+  LanguageSwitcher,
+  MessageError,
+  errorMessage,
+  validateForm,
+} from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api, ApiError } from "./api";
@@ -98,45 +105,45 @@ function Icon({
   );
 }
 const labels: Record<string, string> = {
-  uploaded: "Feltöltve",
-  queued: "Sorban áll",
-  processing: "Feldolgozás alatt",
-  ready: "Ellenőrzésre kész",
-  published: "Közzétéve",
-  failed: "Sikertelen",
+  uploaded: "statuses.uploaded",
+  queued: "statuses.queued",
+  processing: "statuses.processing",
+  ready: "statuses.ready",
+  published: "statuses.published",
+  failed: "statuses.failed",
 };
 const languageName: Record<string, string> = {
-  hu: "Magyar",
-  en: "Angol",
-  de: "Német",
-  fr: "Francia",
-  es: "Spanyol",
-  it: "Olasz",
+  hu: "Hungarian",
+  en: "English",
+  de: "German",
+  fr: "French",
+  es: "Spanish",
+  it: "Italian",
 };
 function LanguageOptions() {
+  const { t } = useI18n();
   return (
     <>
       {Object.entries(languageName).map(([code, name]) => (
         <option key={code} value={code}>
-          {name}
+          {t(name)}
         </option>
       ))}
     </>
   );
 }
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Váratlan hiba történt.";
-}
+
 function fileSize(size: number) {
   return size >= 1024 * 1024
     ? `${(size / 1024 / 1024).toFixed(1)} MB`
     : `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 function Badge({ status }: { status: string }) {
+  const { t } = useI18n();
   return (
     <span className={`badge ${status}`}>
       <span className="status-dot" />
-      {labels[status] ?? status}
+      {t(labels[status] ?? status)}
     </span>
   );
 }
@@ -152,6 +159,7 @@ function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
+  const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
@@ -168,12 +176,19 @@ function Modal({
     >
       <header className="modal-header">
         <div>
-          <span className="eyebrow">SZABÁLYTÁR / ADMIN</span>
+          <span className="eyebrow">{t("RULESHELF / ADMIN")}</span>
           <h2>{title}</h2>
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="Bezárás">
-          <Icon name="close" />
-        </button>
+        <div className="modal-header-actions">
+          <LanguageSwitcher />
+          <button
+            className="icon-button"
+            onClick={onClose}
+            aria-label={t("Close")}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
       </header>
       {children}
     </dialog>
@@ -189,7 +204,8 @@ function GameForm({
   onClose: () => void;
   onSaved: (game: Game) => void;
 }) {
-  const [error, setError] = useState("");
+  const { t, language } = useI18n();
+  const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -197,6 +213,7 @@ function GameForm({
     setError("");
     const data = new FormData(event.currentTarget);
     try {
+      validateForm(event.currentTarget);
       const game = await api<Game>(
         initial ? `/games/${initial.id}` : "/games",
         {
@@ -206,27 +223,29 @@ function GameForm({
       );
       onSaved(game);
     } catch (e) {
-      setError(errorMessage(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
   }
   return (
     <Modal
-      title={initial ? "Játék szerkesztése" : "Új játék a polcon"}
+      title={initial ? t("Edit game") : t("A new game on your shelf")}
       onClose={onClose}
     >
       <p className="modal-intro">
-        Először add meg a játék adatait. A szabálykönyvet a következő lépésben
-        töltheted fel.
+        {t(
+          "Enter the game details first. You can upload the rulebook in the next step.",
+        )}
       </p>
-      <form onSubmit={save}>
+      <form onSubmit={save} noValidate>
         <label>
-          A játék neve <span>*</span>
+          {t("Game name")}
+          <span>*</span>
           <input
             name="title"
             defaultValue={initial?.title}
-            placeholder="Például: Az ötödik évszak"
+            placeholder={t("For example: Everdell")}
             required
             maxLength={150}
             autoFocus
@@ -234,34 +253,38 @@ function GameForm({
         </label>
         <div className="form-grid">
           <label>
-            Kiadás
+            {t("Edition")}
             <input
               name="edition"
               defaultValue={initial?.edition}
-              placeholder="Például: 2024, magyar kiadás"
+              placeholder={t("For example: 2024, English edition")}
               maxLength={150}
             />
           </label>
           <label>
-            Szabály nyelve
-            <select name="language" defaultValue={initial?.language ?? "hu"}>
+            {t("Rulebook language")}
+            <select
+              name="language"
+              aria-label={t("Rulebook language")}
+              defaultValue={initial?.language ?? language}
+            >
               <LanguageOptions />
             </select>
           </label>
         </div>
         <label>
-          Rövid leírás
+          {t("Short description")}
           <textarea
             name="description"
             defaultValue={initial?.description}
-            placeholder="Opcionális megjegyzés a játékhoz vagy a kiadáshoz."
+            placeholder={t("Optional notes about the game or edition.")}
             rows={3}
             maxLength={3000}
           />
         </label>
-        {error && (
+        {!!error && (
           <p className="error" role="alert">
-            {error}
+            {errorMessage(error, t)}
           </p>
         )}
         <footer className="modal-footer">
@@ -271,15 +294,11 @@ function GameForm({
             onClick={onClose}
             disabled={busy}
           >
-            Mégse
+            {t("Cancel")}
           </button>
           <button className="button primary" disabled={busy}>
             <Icon name={initial ? "check" : "plus"} />
-            {busy
-              ? "Mentés…"
-              : initial
-                ? "Változtatások mentése"
-                : "Játék hozzáadása"}
+            {busy ? t("Saving…") : initial ? t("Save changes") : t("Add game")}
           </button>
         </footer>
       </form>
@@ -296,11 +315,12 @@ function UploadForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"file" | "text">("file");
   const [files, setFiles] = useState<File[]>([]);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState("");
   const [autoProcess, setAutoProcess] = useState(true);
   const input = useRef<HTMLInputElement>(null);
@@ -313,15 +333,19 @@ function UploadForm({
     const language = String(form.get("language"));
     let completed = 0;
     try {
+      validateForm(event.currentTarget);
       if (mode === "file" && !files.length)
-        throw new Error("Válassz legalább egy fájlt.");
+        throw new MessageError("Choose at least one file.");
       const work = mode === "file" ? files : [null];
       for (const file of work) {
-        setMessage(file ? `Feltöltés: ${file.name}` : "Szöveg mentése…");
+        setMessage(file ? file.name : "__text__");
         let document: { id: string };
         if (file) {
           if (file.size > 50 * 1024 * 1024)
-            throw new Error(`${file.name}: a fájl legfeljebb 50 MB lehet.`);
+            throw new MessageError(
+              "{name}: the file must be no larger than 50 MB.",
+              { name: file.name },
+            );
           const data = new FormData();
           data.set("file", file);
           data.set("language", language);
@@ -346,7 +370,13 @@ function UploadForm({
       onSaved();
     } catch (e) {
       setError(
-        `${completed ? `${completed} dokumentum már mentve. ` : ""}${errorMessage(e)}`,
+        completed
+          ? new MessageError(
+              "{count} document(s) already saved.",
+              { count: completed },
+              e,
+            )
+          : e,
       );
       setMessage("");
     } finally {
@@ -354,9 +384,10 @@ function UploadForm({
     }
   }
   return (
-    <Modal title="Szabályanyag feltöltése" onClose={onClose}>
+    <Modal title={t("Upload rule material")} onClose={onClose}>
       <p className="modal-intro">
-        A kiválasztott játék: <strong>{game.title}</strong>
+        {t("Selected game:")}
+        <strong>{game.title}</strong>
       </p>
       <div className="tabs">
         <button
@@ -365,7 +396,7 @@ function UploadForm({
           onClick={() => setMode("file")}
         >
           <Icon name="upload" />
-          Fájlok
+          {t("Files")}
         </button>
         <button
           className={mode === "text" ? "active" : ""}
@@ -373,10 +404,10 @@ function UploadForm({
           onClick={() => setMode("text")}
         >
           <Icon name="file" />
-          Szöveg beillesztése
+          {t("Paste text")}
         </button>
       </div>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} noValidate>
         {mode === "file" ? (
           <>
             <input
@@ -408,10 +439,10 @@ function UploadForm({
               <span className="upload-icon">
                 <Icon name="upload" />
               </span>
-              <strong>Húzd ide a szabálykönyvet</strong>
-              <span>vagy kattints a fájlok kiválasztásához</span>
+              <strong>{t("Drop your rulebook here")}</strong>
+              <span>{t("or click to choose files")}</span>
               <small>
-                PDF, TXT, Markdown, PNG, JPG, WebP · legfeljebb 50 MB/fájl
+                {t("PDF, TXT, Markdown, PNG, JPG, WebP · up to 50 MB per file")}
               </small>
             </button>
             {files.length > 0 && (
@@ -426,42 +457,45 @@ function UploadForm({
               </ul>
             )}
             <p className="field-note">
-              Több kép esetén minden kép külön dokumentumként kerül be. A
-              feldolgozó a PDF-ek és képek szövegét is kinyeri.
+              {t(
+                "Each uploaded image becomes a separate document. Text is extracted from both PDFs and images.",
+              )}
             </p>
           </>
         ) : (
           <>
             <label>
-              Dokumentum neve
+              {t("Document name")}
               <input
                 name="title"
-                placeholder="Alapszabály"
-                defaultValue="Alapszabály"
+                placeholder={t("Base rules")}
+                defaultValue={t("Base rules")}
                 required
                 maxLength={200}
               />
             </label>
             <label>
-              Szabályszöveg
+              {t("Rule text")}
               <textarea
                 name="content"
-                placeholder={
-                  "# Előkészületek\n\nIlleszd be a játék szabályait…"
-                }
+                placeholder={t("# Setup\n\nPaste the game rules here…")}
                 rows={9}
                 required
                 maxLength={2_000_000}
               />
             </label>
             <p className="field-note">
-              A Markdown-címek (#, ##) segítenek a szabályrészek tagolásában.
+              {t("Markdown headings (#, ##) help organize rule sections.")}
             </p>
           </>
         )}
         <label>
-          A dokumentum nyelve
-          <select name="language" defaultValue={game.language}>
+          {t("Document language")}
+          <select
+            name="language"
+            aria-label={t("Document language")}
+            defaultValue={game.language}
+          >
             <LanguageOptions />
           </select>
         </label>
@@ -472,16 +506,18 @@ function UploadForm({
             onChange={(event) => setAutoProcess(event.target.checked)}
             disabled={busy}
           />
-          <span>Feldolgozás indítása a feltöltés után</span>
+          <span>{t("Start processing after upload")}</span>
         </label>
         {message && (
           <p className="field-note" role="status">
-            {message}
+            {message === "__text__"
+              ? t("Saving text…")
+              : t("Uploading: {name}", { name: message })}
           </p>
         )}
-        {error && (
+        {!!error && (
           <p className="error" role="alert">
-            {error}
+            {errorMessage(error, t)}
           </p>
         )}
         <footer className="modal-footer">
@@ -491,15 +527,15 @@ function UploadForm({
             onClick={onClose}
             disabled={busy}
           >
-            Mégse
+            {t("Cancel")}
           </button>
           <button className="button primary" disabled={busy}>
             <Icon name="upload" />
             {busy
-              ? "Feltöltés…"
+              ? t("Uploading…")
               : autoProcess
-                ? "Feltöltés és feldolgozás"
-                : "Feltöltés"}
+                ? t("Upload and process")
+                : t("Upload")}
           </button>
         </footer>
       </form>
@@ -516,11 +552,12 @@ function PreviewModal({
   onClose: () => void;
   onPublished: () => void;
 }) {
+  const { t } = useI18n();
   const [data, setData] = useState<Preview | null>(null);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -533,7 +570,7 @@ function PreviewModal({
     )
       .then(setData)
       .catch((e) => {
-        if (!controller.signal.aborted) setError(errorMessage(e));
+        if (!controller.signal.aborted) setError(e);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -547,13 +584,13 @@ function PreviewModal({
       await api(`/versions/${document.version_id}/publish`, { method: "POST" });
       onPublished();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Modal title="Feldolgozott szabályanyag" onClose={onClose} wide>
+    <Modal title={t("Processed rule material")} onClose={onClose} wide>
       <div className="preview-title">
         <Icon name="file" />
         <span>{document.filename}</span>
@@ -571,41 +608,49 @@ function PreviewModal({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Keresés a kinyert szövegben…"
-          aria-label="Keresés a feldolgozott dokumentumban"
+          placeholder={t("Search extracted text…")}
+          aria-label={t("Search the processed document")}
         />
-        <button className="button secondary">Keresés</button>
+        <button className="button secondary">{t("Search")}</button>
       </form>
-      {error && (
+      {!!error && (
         <p className="error" role="alert">
-          {error}
+          {errorMessage(error, t)}
         </p>
       )}
       <div className="preview-body" aria-busy={loading}>
         {loading ? (
-          <p className="loading">Szabályrészek betöltése…</p>
+          <p className="loading">{t("Loading rule sections…")}</p>
         ) : (
           <>
             <div className="preview-summary">
-              <span>{data?.total_chunks ?? 0} szabályrész</span>
-              <span>{data?.assets.length ?? 0} eredeti ábra</span>
               <span>
-                {search ? "Kulcsszavas találatok" : "Eredeti sorrend"}
+                {t("{count} rule section(s)", {
+                  count: data?.total_chunks ?? 0,
+                })}
               </span>
+              <span>
+                {t("{count} original figure(s)", {
+                  count: data?.assets.length ?? 0,
+                })}
+              </span>
+              <span>{search ? t("Keyword matches") : t("Original order")}</span>
             </div>
             {data?.chunks.length === 0 && (
               <p className="empty-text">
-                Nincs találat. Próbálj másik kifejezést.
+                {t("No results. Try another search term.")}
               </p>
             )}
             {data?.chunks.map((chunk) => (
               <article className="chunk" key={chunk.id}>
                 <div className="chunk-meta">
-                  <strong>{chunk.heading}</strong>
+                  <strong>{chunk.heading || t("Rules")}</strong>
                   <span>
                     {chunk.page
-                      ? `${chunk.page}. PDF-oldal`
-                      : `${chunk.ordinal + 1}. szabályrész`}
+                      ? t("PDF page {page}", { page: chunk.page })
+                      : t("Rule section {number}", {
+                          number: chunk.ordinal + 1,
+                        })}
                   </span>
                 </div>
                 <p>{chunk.content}</p>
@@ -617,7 +662,7 @@ function PreviewModal({
                 disabled={offset === 0}
                 onClick={() => setOffset(Math.max(0, offset - 50))}
               >
-                Előző
+                {t("Previous")}
               </button>
               <span>
                 {offset + 1}–{offset + (data?.chunks.length ?? 0)}
@@ -627,7 +672,7 @@ function PreviewModal({
                 disabled={(data?.chunks.length ?? 0) < 50}
                 onClick={() => setOffset(offset + 50)}
               >
-                Következő
+                {t("Next")}
               </button>
             </div>
             {!!data?.assets.length && (
@@ -642,12 +687,16 @@ function PreviewModal({
                   >
                     <img
                       src={`/api/assets/${asset.id}`}
-                      alt={asset.caption || "Eredeti ábra a szabálykönyvből"}
+                      alt={
+                        asset.caption || t("Original figure from the rulebook")
+                      }
                       loading="lazy"
                     />
                     <span>
-                      {asset.caption || "Eredeti ábra"}
-                      {asset.page ? ` · ${asset.page}. oldal` : ""}
+                      {asset.caption || t("Original figure")}
+                      {asset.page
+                        ? ` · ${t("Page {page}", { page: asset.page })}`
+                        : ""}
                     </span>
                   </a>
                 ))}
@@ -662,7 +711,7 @@ function PreviewModal({
           href={`/api/documents/${document.id}/source`}
         >
           <Icon name="file" />
-          Eredeti letöltése
+          {t("Download original")}
         </a>
         {document.status === "ready" && (
           <button
@@ -671,7 +720,7 @@ function PreviewModal({
             disabled={busy || loading}
           >
             <Icon name="check" />
-            {busy ? "Közzététel…" : "Ellenőriztem, közzéteszem"}
+            {busy ? t("Publishing…") : t("Reviewed — publish")}
           </button>
         )}
       </footer>
@@ -680,13 +729,15 @@ function PreviewModal({
 }
 
 function Login({ onLogin }: { onLogin: () => void }) {
-  const [error, setError] = useState("");
+  const { t } = useI18n();
+  const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
+      validateForm(event.currentTarget);
       await api("/auth/login", {
         method: "POST",
         body: JSON.stringify(
@@ -695,37 +746,42 @@ function Login({ onLogin }: { onLogin: () => void }) {
       });
       onLogin();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
   }
   return (
     <main className="login-page">
+      <div className="login-language">
+        <LanguageSwitcher />
+      </div>
       <div className="login-art">
         <div className="brand">
           <Icon name="books" />
           <span>
-            Szabálytár<span className="brand-dot">.</span>
+            {t("RuleShelf")}
+            <span className="brand-dot">.</span>
           </span>
         </div>
-        <span className="eyebrow">MINDEN JÓ JÁTÉK ITT KEZDŐDIK</span>
+        <span className="eyebrow">{t("EVERY GREAT GAME STARTS HERE")}</span>
         <h1>
-          A szabályoknak
+          {t("Rules deserve")}
           <br />
-          is jár egy
+          {t("their own")}
           <br />
-          <em>saját polc.</em>
+          <em>{t("shelf.")}</em>
         </h1>
         <p>
-          Rendezd egy helyre a társasjátékaid szabálykönyveit, hogy játék közben
-          minden válasz kéznél legyen.
+          {t(
+            "Keep your board game rulebooks together so the rules are always within reach during play.",
+          )}
         </p>
         <div className="book-art" aria-hidden="true">
-          <span>SZABÁLYOK</span>
-          <span>EGY JÓ KÖR</span>
-          <span>JÁTÉKTÁR</span>
-          <span>KEZDŐDHET!</span>
+          <span>{t("RULES")}</span>
+          <span>{t("A GOOD TURN")}</span>
+          <span>{t("GAME LIBRARY")}</span>
+          <span>{t("LET’S PLAY!")}</span>
         </div>
       </div>
       <div className="login-panel">
@@ -733,12 +789,12 @@ function Login({ onLogin }: { onLogin: () => void }) {
           <span className="login-lock">
             <Icon name="lock" />
           </span>
-          <span className="eyebrow">ADMINFELÜLET</span>
-          <h2>Üdv a Szabálytárban</h2>
-          <p>Jelentkezz be a gyűjteményed kezeléséhez.</p>
-          <form onSubmit={submit}>
+          <span className="eyebrow">{t("ADMIN INTERFACE")}</span>
+          <h2>{t("Welcome to RuleShelf")}</h2>
+          <p>{t("Sign in to manage your collection.")}</p>
+          <form onSubmit={submit} noValidate>
             <label>
-              Felhasználónév
+              {t("Username")}
               <input
                 name="username"
                 autoComplete="username"
@@ -747,7 +803,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
               />
             </label>
             <label>
-              Jelszó
+              {t("Password")}
               <input
                 name="password"
                 type="password"
@@ -756,29 +812,34 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 autoFocus
               />
             </label>
-            {error && (
+            {!!error && (
               <p className="error" role="alert">
-                {error}
+                {errorMessage(error, t)}
               </p>
             )}
             <button className="button primary full" disabled={busy}>
-              {busy ? "Belépés…" : "Belépés"}
+              {busy ? t("Signing in…") : t("Sign in")}
               <Icon name="arrow" />
             </button>
           </form>
           <small>
-            A belépési adatokat a telepítéskor létrehozott
+            {t("Find your sign-in details in the")}
             <br />
-            <code>infra/.env</code> fájlban találod.
+            <code>infra/.env</code>
+            {" "}
+            {t("file created during setup.")}
           </small>
         </div>
-        <span className="login-footnote">Saját gyűjtemény. Saját otthon.</span>
+        <span className="login-footnote">
+          {t("Your collection. Your home.")}
+        </span>
       </div>
     </main>
   );
 }
 
 export default function App() {
+  const { t, language } = useI18n();
   const [auth, setAuth] = useState<"loading" | "in" | "out">("loading");
   const [games, setGames] = useState<Game[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -789,7 +850,7 @@ export default function App() {
   const [form, setForm] = useState<"new" | "edit" | null>(null);
   const [upload, setUpload] = useState(false);
   const [preview, setPreview] = useState<Document | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -797,7 +858,7 @@ export default function App() {
   const refresh = () => setRevision((v) => v + 1);
   function handleError(e: unknown) {
     if (e instanceof ApiError && e.status === 401) setAuth("out");
-    else setError(errorMessage(e));
+    else setError(e);
   }
   useEffect(() => {
     api("/auth/me")
@@ -858,7 +919,7 @@ export default function App() {
     try {
       await api(`/documents/${doc.id}/process`, { method: "POST" });
       refresh();
-      setNotice("A feldolgozás sorba állítva.");
+      setNotice("Processing has been queued.");
     } catch (e) {
       handleError(e);
     } finally {
@@ -879,14 +940,14 @@ export default function App() {
     return (
       <div className="startup">
         <Icon name="books" />
-        <p>Szabálytár betöltése…</p>
+        <p>{t("Loading RuleShelf…")}</p>
       </div>
     );
   if (auth === "out") return <Login onLogin={() => setAuth("in")} />;
   const filtered = games.filter((g) =>
     `${g.title} ${g.edition}`
-      .toLocaleLowerCase("hu")
-      .includes(filter.toLocaleLowerCase("hu")),
+      .toLocaleLowerCase(language)
+      .includes(filter.toLocaleLowerCase(language)),
   );
   return (
     <div className="app-shell">
@@ -894,67 +955,72 @@ export default function App() {
         <div className="brand">
           <Icon name="books" />
           <span>
-            Szabálytár<span className="brand-dot">.</span>
+            {t("RuleShelf")}
+            <span className="brand-dot">.</span>
           </span>
         </div>
-        <span className="sidebar-caption">A TE JÁTÉKPOLCOD</span>
+        <span className="sidebar-caption">{t("YOUR GAME SHELF")}</span>
         <button className="nav-item active" onClick={() => setSelected(null)}>
           <Icon name="books" />
-          Játékgyűjtemény<span>{games.length}</span>
+          {t("Game collection")}
+          <span>{games.length}</span>
         </button>
         <div className="sidebar-note">
           <span className="note-star">✳</span>
           <p>
-            Kevesebb lapozás.
+            {t("Less page turning.")}
             <br />
-            <strong>Több játék.</strong>
+            <strong>{t("More playing.")}</strong>
           </p>
-          <small>A jó válasz a jó szabálykönyvvel kezdődik.</small>
+          <small>{t("A good answer starts with the right rulebook.")}</small>
         </div>
         <div className="sidebar-bottom">
           <div className="admin-profile">
             <span>A</span>
             <div>
-              <strong>Adminisztrátor</strong>
-              <small>Gyűjtemény kezelése</small>
+              <strong>{t("Administrator")}</strong>
+              <small>{t("Manage collection")}</small>
             </div>
           </div>
           <button onClick={logout} className="logout">
             <Icon name="logout" />
-            Kijelentkezés
+            {t("Sign out")}
           </button>
         </div>
       </aside>
       <main className="workspace">
         <header className="topbar">
-          <span>GYŰJTEMÉNY / {game ? "JÁTÉK ADATLAPJA" : "ÁTTEKINTÉS"}</span>
+          <span>
+            {t("COLLECTION")} / {game ? t("GAME DETAILS") : t("OVERVIEW")}
+          </span>
+          <LanguageSwitcher />
           <span className="local-indicator">
             <i />
-            Saját szabálytár
+            {t("Your rule library")}
           </span>
         </header>
         <div className="main-content">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">MINDEN SZABÁLYNAK MEGVAN A HELYE</span>
-              <h1>{game ? game.title : "A játékpolcod"}</h1>
+              <span className="eyebrow">{t("A PLACE FOR EVERY RULE")}</span>
+              <h1>{game ? game.title : t("Your game shelf")}</h1>
               <p>
                 {game
-                  ? game.edition || "Szabályanyagok és feldolgozás"
-                  : "Töltsd fel a szabálykönyveket. Mi segítünk rendszerezni őket."}
+                  ? game.edition || t("Rule material and processing")
+                  : t("Upload your rulebooks. We’ll help you organize them.")}
               </p>
             </div>
             <button className="button primary" onClick={() => setForm("new")}>
               <Icon name="plus" />
-              Új játék
+              {t("New game")}
             </button>
           </div>
-          {error && (
+          {!!error && (
             <div className="error global-error" role="alert">
-              {error}
+              {errorMessage(error, t)}
               <button
                 className="icon-button"
-                aria-label="Hibaüzenet bezárása"
+                aria-label={t("Dismiss error")}
                 onClick={() => setError("")}
               >
                 <Icon name="close" />
@@ -965,12 +1031,12 @@ export default function App() {
             <>
               <div className="stats">
                 <div>
-                  <span>JÁTÉK A POLCON</span>
+                  <span>{t("GAMES ON THE SHELF")}</span>
                   <strong>{games.length.toString().padStart(2, "0")}</strong>
                   <Icon name="books" />
                 </div>
                 <div>
-                  <span>SZABÁLYDOKUMENTUM</span>
+                  <span>{t("RULE DOCUMENTS")}</span>
                   <strong>
                     {games
                       .reduce((n, g) => n + g.document_count, 0)
@@ -980,7 +1046,7 @@ export default function App() {
                   <Icon name="file" />
                 </div>
                 <div>
-                  <span>KÖZZÉTETT SZABÁLYANYAG</span>
+                  <span>{t("PUBLISHED RULEBOOKS")}</span>
                   <strong>
                     {games
                       .reduce((n, g) => n + g.published_count, 0)
@@ -992,20 +1058,21 @@ export default function App() {
               </div>
               <div className="collection-toolbar">
                 <h2>
-                  Játékgyűjtemény <span>{games.length}</span>
+                  {t("Game collection")}
+                  <span>{games.length}</span>
                 </h2>
                 <div className="search-field">
                   <Icon name="search" />
                   <input
-                    placeholder="Játék keresése…"
+                    placeholder={t("Search games…")}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    aria-label="Játék keresése"
+                    aria-label={t("Search games")}
                   />
                 </div>
               </div>
               {loading && !games.length ? (
-                <p className="loading">Gyűjtemény betöltése…</p>
+                <p className="loading">{t("Loading collection…")}</p>
               ) : games.length === 0 ? (
                 <section className="empty-state">
                   <div className="empty-books" aria-hidden="true">
@@ -1013,20 +1080,21 @@ export default function App() {
                     <span />
                     <span />
                   </div>
-                  <span className="eyebrow">ITT KEZDŐDIK A GYŰJTEMÉNYED</span>
-                  <h2>Az első játéknak már van helye.</h2>
+                  <span className="eyebrow">
+                    {t("YOUR COLLECTION STARTS HERE")}
+                  </span>
+                  <h2>{t("There’s room for your first game.")}</h2>
                   <p>
-                    Adj hozzá egy társasjátékot, majd töltsd fel a
-                    szabálykönyvét.
+                    {t("Add a board game, then upload its rulebook.")}
                     <br />
-                    PDF-ből, képből vagy egyszerű szövegből is dolgozhatunk.
+                    {t("Start with a PDF, an image or plain text.")}
                   </p>
                   <button
                     className="button primary"
                     onClick={() => setForm("new")}
                   >
                     <Icon name="plus" />
-                    Az első játék hozzáadása
+                    {t("Add your first game")}
                   </button>
                 </section>
               ) : (
@@ -1042,14 +1110,16 @@ export default function App() {
                     >
                       <div className={`game-cover cover-${index % 4}`}>
                         <span className="cover-edition">
-                          {languageName[g.language] ?? g.language} szabály
+                          {t("{language} rules", {
+                            language: t(languageName[g.language] ?? g.language),
+                          })}
                         </span>
                         <span className="cover-mark" aria-hidden="true">
                           {["✳", "◈", "✺", "⬡"][index % 4]}
                         </span>
                         <strong>{g.title}</strong>
                         <span className="cover-bottom">
-                          {g.edition || "Társasjáték"}
+                          {g.edition || t("Board game")}
                           <Icon name="books" />
                         </span>
                       </div>
@@ -1057,9 +1127,11 @@ export default function App() {
                         <div>
                           <strong>{g.title}</strong>
                           <small>
-                            {g.document_count} dokumentum
+                            {t("{count} document(s)", {
+                              count: g.document_count,
+                            })}
                             {g.published_count
-                              ? ` · ${g.published_count} közzétéve`
+                              ? ` · ${t("{count} published", { count: g.published_count })}`
                               : ""}
                           </small>
                         </div>
@@ -1071,31 +1143,34 @@ export default function App() {
                     <span>
                       <Icon name="plus" />
                     </span>
-                    <strong>Jöhet a következő játék</strong>
-                    <small>Bővítsd a gyűjteményed</small>
+                    <strong>{t("Add another game")}</strong>
+                    <small>{t("Grow your collection")}</small>
                   </button>
                   {filtered.length === 0 && (
                     <p className="empty-text">
-                      Nincs ilyen játék a gyűjteményben.
+                      {t("No matching game in your collection.")}
                     </p>
                   )}
                 </div>
               )}
               <div className="how-it-works">
                 <span className="eyebrow">
-                  HOGYAN KERÜL A SZABÁLY A POLCRA?
+                  {t("HOW DOES A RULEBOOK REACH YOUR SHELF?")}
                 </span>
                 <div>
                   <span>
-                    <b>01</b>Játék hozzáadása
+                    <b>01</b>
+                    {t("Add game")}
                   </span>
                   <Icon name="arrow" />
                   <span>
-                    <b>02</b>Szabályanyag feltöltése
+                    <b>02</b>
+                    {t("Upload rule material")}
                   </span>
                   <Icon name="arrow" />
                   <span>
-                    <b>03</b>Ellenőrzés és közzététel
+                    <b>03</b>
+                    {t("Review and publish")}
                   </span>
                 </div>
               </div>
@@ -1107,60 +1182,58 @@ export default function App() {
                   className="text-button"
                   onClick={() => setSelected(null)}
                 >
-                  ← Vissza a gyűjteményhez
+                  {t("← Back to collection")}
                 </button>
                 <button
                   className="button secondary"
                   onClick={() => setForm("edit")}
                 >
                   <Icon name="edit" />
-                  Adatok szerkesztése
+                  {t("Edit details")}
                 </button>
               </div>
               <section className="game-info">
                 <div className="game-emblem">✳</div>
                 <div>
-                  <span className="eyebrow">JÁTÉK ADATAI</span>
+                  <span className="eyebrow">{t("GAME DETAILS")}</span>
                   <p>
                     {game.description ||
-                      "Ehhez a játékhoz még nem adtál meg leírást."}
+                      t("No description has been added for this game.")}
                   </p>
                   <span className="metadata">
-                    {languageName[game.language] ?? game.language} ·{" "}
-                    {game.edition || "Kiadás nincs megadva"}
+                    {t(languageName[game.language] ?? game.language)} ·{" "}
+                    {game.edition || t("Edition not specified")}
                   </span>
                 </div>
               </section>
               <div className="collection-toolbar">
                 <h2>
-                  Szabályanyagok <span>{documents.length}</span>
+                  {t("Rule material")}
+                  <span>{documents.length}</span>
                 </h2>
                 <button
                   className="button primary"
                   onClick={() => setUpload(true)}
                 >
                   <Icon name="upload" />
-                  Szabályanyag feltöltése
+                  {t("Upload rule material")}
                 </button>
               </div>
               {docLoading ? (
-                <p className="loading">Dokumentumok betöltése…</p>
+                <p className="loading">{t("Loading documents…")}</p>
               ) : documents.length === 0 ? (
                 <section className="document-empty">
                   <span className="upload-icon">
                     <Icon name="file" />
                   </span>
-                  <h3>Még nincs szabályanyag</h3>
-                  <p>
-                    Tölts fel egy szabálykönyvet, vagy illeszd be a szabály
-                    szövegét.
-                  </p>
+                  <h3>{t("No rule material yet")}</h3>
+                  <p>{t("Upload a rulebook or paste the rule text.")}</p>
                   <button
                     className="button secondary"
                     onClick={() => setUpload(true)}
                   >
                     <Icon name="upload" />
-                    Feltöltés
+                    {t("Upload")}
                   </button>
                 </section>
               ) : (
@@ -1183,13 +1256,17 @@ export default function App() {
                           <Badge status={doc.status} />
                         </div>
                         <p className="document-meta">
-                          {languageName[doc.language] ?? doc.language} ·{" "}
+                          {t(languageName[doc.language] ?? doc.language)} ·{" "}
                           {fileSize(doc.size_bytes)}
                           {doc.chunk_count
-                            ? ` · ${doc.chunk_count} szabályrész`
+                            ? ` · ${t("{count} rule section(s)", { count: doc.chunk_count })}`
                             : ""}
-                          {doc.page_count ? ` · ${doc.page_count} oldal` : ""}
-                          {doc.asset_count ? ` · ${doc.asset_count} ábra` : ""}
+                          {doc.page_count
+                            ? ` · ${t("{count} page(s)", { count: doc.page_count })}`
+                            : ""}
+                          {doc.asset_count
+                            ? ` · ${t("{count} figure(s)", { count: doc.asset_count })}`
+                            : ""}
                         </p>
                         {["processing", "queued"].includes(doc.status) && (
                           <div className="processing">
@@ -1200,16 +1277,28 @@ export default function App() {
                               />
                             </div>
                             <span>
-                              {doc.stage} · {doc.progress ?? 0}%
+                              {doc.stage_code
+                                ? t(`stages.${doc.stage_code}`)
+                                : t("stages.processing")}
+                              {doc.stage_params?.device
+                                ? ` (${doc.stage_params.device})`
+                                : ""}{" "}
+                              · {doc.progress ?? 0}%
                             </span>
                           </div>
                         )}
                         {doc.error && (
-                          <p className="document-error">{doc.error}</p>
+                          <p className="document-error">
+                            {t(
+                              `errors.${doc.error_code ?? "processing_failed"}`,
+                            )}
+                          </p>
                         )}
                         {doc.has_published && doc.status !== "published" && (
                           <p className="field-note">
-                            A korábban közzétett változat továbbra is megmarad.
+                            {t(
+                              "The previously published version remains available.",
+                            )}
                           </p>
                         )}
                       </div>
@@ -1226,7 +1315,7 @@ export default function App() {
                                 })
                               }
                             >
-                              Közzétett változat
+                              {t("Published version")}
                             </button>
                           )}
                         {["ready", "published"].includes(doc.status) && (
@@ -1234,7 +1323,7 @@ export default function App() {
                             className="button secondary"
                             onClick={() => setPreview(doc)}
                           >
-                            Ellenőrzés
+                            {t("Review")}
                             <Icon name="arrow" />
                           </button>
                         )}
@@ -1250,17 +1339,17 @@ export default function App() {
                               }
                             />
                             {pending === doc.id
-                              ? "Indítás…"
+                              ? t("Starting…")
                               : doc.status === "uploaded"
-                                ? "Feldolgozás"
-                                : "Újrafeldolgozás"}
+                                ? t("Process")
+                                : t("Reprocess")}
                           </button>
                         )}
                         <a
                           className="text-button"
                           href={`/api/documents/${doc.id}/source`}
                         >
-                          Eredeti letöltése
+                          {t("Download original")}
                         </a>
                       </div>
                     </article>
@@ -1270,25 +1359,26 @@ export default function App() {
               <div className="info-note">
                 <Icon name="check" />
                 <p>
-                  A feldolgozott anyag először ellenőrzésre kerül. Nézd át a
-                  kinyert szöveget és ábrákat, majd tedd közzé a jóváhagyott
-                  változatot.
+                  {t(
+                    "Review the extracted text and figures first, then publish the approved version.",
+                  )}
                 </p>
               </div>
             </>
           )}
           <footer className="workspace-footer">
             <span>
-              Szabálytár <b>·</b> Admin
+              {t("RuleShelf")}
+              <b>·</b> Admin
             </span>
-            <span>A következő jó játékhoz.</span>
+            <span>{t("For your next great game.")}</span>
           </footer>
         </div>
       </main>
       {notice && (
         <div className="toast" role="status">
           <Icon name="check" />
-          {notice}
+          {t(notice)}
         </div>
       )}
       {form && (
@@ -1299,7 +1389,7 @@ export default function App() {
             setForm(null);
             refresh();
             setSelected(saved.id);
-            setNotice("A játék adatait elmentettük.");
+            setNotice("Game details saved.");
           }}
         />
       )}
@@ -1313,7 +1403,7 @@ export default function App() {
           onSaved={() => {
             setUpload(false);
             refresh();
-            setNotice("A szabályanyagot elmentettük.");
+            setNotice("Rule material saved.");
           }}
         />
       )}
@@ -1324,7 +1414,7 @@ export default function App() {
           onPublished={() => {
             setPreview(null);
             refresh();
-            setNotice("A szabályanyag közzétéve.");
+            setNotice("Rule material published.");
           }}
         />
       )}

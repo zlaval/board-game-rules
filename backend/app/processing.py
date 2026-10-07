@@ -34,7 +34,7 @@ def split_text(text: str, limit: int = 1800) -> list[str]:
 def extract_text(path: Path):
     text = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
     sections = []
-    heading = "Szabályok"
+    heading = ""
     buffer = []
 
     def flush():
@@ -71,7 +71,7 @@ def extract_docling(path: Path, output: Path):
     from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
 
     def convert(device):
-        progress(output, f"OCR és dokumentummodellek betöltése ({device})", 20)
+        progress(output, f"loading_ocr ({device})", 20)
         options = PdfPipelineOptions()
         options.accelerator_options = AcceleratorOptions(num_threads=2, device=device)
         # ONNX Runtime is CPU-only here; torch shares the CUDA-enabled PyTorch runtime.
@@ -98,18 +98,16 @@ def extract_docling(path: Path, output: Path):
             path, max_num_pages=MAX_DOCUMENT_PAGES, max_file_size=MAX_UPLOAD_BYTES
         )
         if result.status != ConversionStatus.SUCCESS:
-            raise ValueError(
-                "A dokumentum feldolgozása nem volt teljes. Ellenőrizd a fájlt és az oldalkorlátot."
-            )
+            raise ValueError("Document conversion was incomplete. Check the file and page limit.")
         return result
 
     result = convert_with_fallback(convert, output)
     doc = result.document
     doc.save_as_json(output / "document.json")
     (output / "document.md").write_text(doc.export_to_markdown(), encoding="utf-8")
-    progress(output, "Szabályrészek és forráshelyek kinyerése", 70)
+    progress(output, "extracting_sections", 70)
     sections = []
-    heading = "Szabályok"
+    heading = ""
     for item, _ in doc.iterate_items():
         label = getattr(getattr(item, "label", None), "value", "")
         content = getattr(item, "text", "")
@@ -151,7 +149,7 @@ def extract_docling(path: Path, output: Path):
 
 def process(path: Path, output: Path):
     output.mkdir(parents=True, exist_ok=True)
-    progress(output, "Szöveg kinyerése", 15)
+    progress(output, "extracting_text", 15)
     if path.suffix.lower() in {".txt", ".md"}:
         sections, assets, pages, processor = extract_text(path)
     else:
@@ -164,11 +162,11 @@ def process(path: Path, output: Path):
             )
     if not chunks:
         raise ValueError(
-            "Nem sikerült olvasható szabályszöveget kinyerni. Ellenőrizd a dokumentumot vagy a kép minőségét."
+            "Could not extract readable rule text. Check the document or image quality."
         )
     if len(chunks) > 20000:
-        raise ValueError("Túl sok szabályrész. Bontsd kisebb dokumentumokra a szabályanyagot.")
-    progress(output, "Keresési adatok előkészítése", 90)
+        raise ValueError("Too many rule sections. Split the material into smaller documents.")
+    progress(output, "preparing_search", 90)
     manifest = {
         "chunks": chunks,
         "assets": assets,

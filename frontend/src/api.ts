@@ -1,9 +1,13 @@
-export class ApiError extends Error {
+import { getLanguage, MessageError } from "./i18n";
+import type { Params } from "./i18n";
+
+export class ApiError extends MessageError {
   constructor(
     public status: number,
-    message: string,
+    key: string,
+    params: Params = {},
   ) {
-    super(message);
+    super(key, params);
   }
 }
 
@@ -12,6 +16,7 @@ export async function api<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
+  headers.set("Accept-Language", getLanguage());
   if (options.body && !(options.body instanceof FormData))
     headers.set("Content-Type", "application/json");
   const response = await fetch(`/api${path}`, {
@@ -21,13 +26,13 @@ export async function api<T>(
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    const message =
-      typeof data.detail === "string"
-        ? data.detail
+    const key =
+      typeof data.code === "string"
+        ? `errors.${data.code}`
         : response.status === 413
-          ? "A feltöltött fájl túl nagy."
-          : "A kérés nem sikerült. Ellenőrizd a megadott adatokat.";
-    throw new ApiError(response.status, message);
+          ? "errors.upload_too_large"
+          : "errors.request_failed";
+    throw new ApiError(response.status, key, data.params ?? {});
   }
   return response.json() as Promise<T>;
 }
@@ -52,8 +57,11 @@ export type Document = {
   status: string;
   version_id: string | null;
   stage: string | null;
+  stage_code: string | null;
+  stage_params: Params;
   progress: number | null;
   error: string | null;
+  error_code: string | null;
   page_count: number;
   character_count: number;
   chunk_count: number;

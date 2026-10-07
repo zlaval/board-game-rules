@@ -906,6 +906,15 @@ svg {
   letter-spacing: -0.6px;
   margin-top: 7px;
 }
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.modal-header-actions .language-switcher > span {
+  display: none;
+}
 .modal-header .eyebrow {
   font-size: 8px;
 }
@@ -1221,9 +1230,53 @@ textarea {
   z-index: 20;
 }
 .login-page {
+  position: relative;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
+}
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.language-switcher select {
+  width: auto;
+  margin: 0;
+  padding: 6px 9px;
+  color: #253d35;
+  border: 1px solid #d7ded2;
+  border-radius: 7px;
+  background: #fff;
+}
+.login-language {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+}
+.topbar > .language-switcher {
+  margin-left: auto;
+  margin-right: 20px;
+}
+@media (max-width: 760px) {
+  .language-switcher > span,
+  .topbar .local-indicator {
+    display: none;
+  }
+  .login-language {
+    top: 14px;
+    right: 16px;
+  }
+  .topbar > .language-switcher {
+    margin-right: 0;
+  }
+  .login-art {
+    padding-top: 65px;
+  }
 }
 .login-art {
   background: #183d35;
@@ -1680,7 +1733,7 @@ textarea {
     grid-template-columns: 1fr;
   }
   .login-art {
-    padding: 25px 30px 35px;
+    padding: 65px 30px 35px;
   }
   .login-art > .eyebrow {
     margin-top: 30px;
