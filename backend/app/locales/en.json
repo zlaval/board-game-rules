@@ -34,5 +34,20 @@
   "stages.preparing_search": "Preparing search data",
   "stages.ready": "Ready for review",
   "stages.failed": "Processing failed",
-  "stages.interrupted": "Processing interrupted"
+  "stages.interrupted": "Processing interrupted",
+  "errors.question_rate_limit": "Too many questions. Please wait a minute and try again.",
+  "errors.ai_busy": "The explanation service is busy. Please try again shortly.",
+  "errors.invalid_rule_selection": "The selected rulebooks are not published for this game. Refresh the library.",
+  "errors.no_published_rules": "This game has no published rulebooks yet.",
+  "errors.source_not_available": "This source is no longer published. Refresh the library and ask again.",
+  "errors.voice_not_configured": "Voice input is not configured. Please type your question.",
+  "errors.unsupported_audio": "This audio format is not supported.",
+  "errors.audio_too_large": "The recording must be no larger than 10 MB.",
+  "errors.empty_audio": "No audio was recorded. Please try again.",
+  "errors.empty_transcription": "No speech was recognized. Please try again or type your question.",
+  "errors.transcription_too_long": "The recognized question is too long. Please record a shorter question.",
+  "errors.transcription_failed": "Speech recognition is unavailable. Please try again or type your question.",
+  "errors.microphone_unavailable": "Microphone access requires HTTPS or localhost and a supported browser.",
+  "errors.microphone_denied": "Microphone permission was denied. Allow access in your browser or type your question.",
+  "errors.recording_failed": "Could not record audio. Check your microphone or type your question."
 }

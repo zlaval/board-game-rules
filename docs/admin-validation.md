@@ -33,7 +33,7 @@ A tesztfuttató jelenleg egy Starlette figyelmeztetést ad a httpx-alapú TestCl
 
 ## Aktuális határok
 
-Ez az admin és a helyi dokumentumfeldolgozás első változata. A fordítás, szemantikus embeddingkészítés, forrásos AI-kérdezés és hangbevitel a következő fejlesztési szakaszokhoz tartozik. Az embeddingmező és a pgvector bővítmény elő van készítve.
+Az admin és a helyi dokumentumfeldolgozás mellett már elkészült a kérdezőfelület, opcionális forrásos OpenAI-magyarázattal és hangátirattal. A szabálykönyv-fordítás és szemantikus embeddingkészítés még hátravan. Az embeddingmező és a pgvector bővítmény elő van készítve. A kérdezőfelület ellenőrzéseit a `docs/player-validation.md` rögzíti; az admin a `/admin` útvonalon érhető el.
 
 Az ábrákat és a kinyert szöveget meg lehet nézni és a változatot jóvá lehet hagyni; a kinyert szöveg, fordítás és ábrakivágás kézi javítófelülete még nem része ennek a verziónak. Több kép külön dokumentumként kezelhető. A forráshely PDF-oldalsorszám; a nyomtatott oldalszám automatikus felismerése későbbi feladat.
 

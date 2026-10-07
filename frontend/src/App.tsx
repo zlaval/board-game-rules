@@ -80,7 +80,7 @@ const paths: Record<IconName, ReactNode> = {
     </>
   ),
 };
-function Icon({
+export function Icon({
   name,
   className = "",
 }: {
@@ -148,16 +148,18 @@ function Badge({ status }: { status: string }) {
   );
 }
 
-function Modal({
+export function Modal({
   title,
   children,
   onClose,
   wide = false,
+  eyebrow = "RULESHELF / ADMIN",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  eyebrow?: string;
 }) {
   const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -176,7 +178,7 @@ function Modal({
     >
       <header className="modal-header">
         <div>
-          <span className="eyebrow">{t("RULESHELF / ADMIN")}</span>
+          <span className="eyebrow">{t(eyebrow)}</span>
           <h2>{title}</h2>
         </div>
         <div className="modal-header-actions">
@@ -825,9 +827,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
           <small>
             {t("Find your sign-in details in the")}
             <br />
-            <code>infra/.env</code>
-            {" "}
-            {t("file created during setup.")}
+            <code>infra/.env</code> {t("file created during setup.")}
           </small>
         </div>
         <span className="login-footnote">
@@ -975,6 +975,10 @@ export default function App() {
           <small>{t("A good answer starts with the right rulebook.")}</small>
         </div>
         <div className="sidebar-bottom">
+          <a href="/" className="player-link">
+            <Icon name="search" />
+            {t("Ask the rules")}
+          </a>
           <div className="admin-profile">
             <span>A</span>
             <div>

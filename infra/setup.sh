@@ -18,6 +18,9 @@ COOKIE_SECURE=false
 MAX_UPLOAD_MB=50
 MAX_DOCUMENT_PAGES=100
 PROCESSING_DEVICE=auto
+OPENAI_API_KEY=
+OPENAI_ANSWER_MODEL=gpt-4.1-mini
+OPENAI_TRANSCRIPTION_MODEL=gpt-transcribe
 EOF
 echo 'Created infra/.env with generated credentials. Admin username: admin. Read ADMIN_PASSWORD locally from this file.'
 

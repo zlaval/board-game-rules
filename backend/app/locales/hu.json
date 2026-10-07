@@ -34,5 +34,20 @@
   "stages.preparing_search": "Keresési adatok előkészítése",
   "stages.ready": "Ellenőrzésre kész",
   "stages.failed": "Sikertelen feldolgozás",
-  "stages.interrupted": "Megszakadt feldolgozás"
+  "stages.interrupted": "Megszakadt feldolgozás",
+  "errors.question_rate_limit": "Túl sok kérdés érkezett. Várj egy percet, majd próbáld újra.",
+  "errors.ai_busy": "A magyarázó szolgáltatás foglalt. Próbáld újra rövidesen.",
+  "errors.invalid_rule_selection": "A kiválasztott szabálykönyvek nem érhetők el ehhez a játékhoz közzétett változatban. Frissítsd a gyűjteményt.",
+  "errors.no_published_rules": "Ehhez a játékhoz még nincs közzétett szabálykönyv.",
+  "errors.source_not_available": "Ez a forrás már nincs közzétéve. Frissítsd a gyűjteményt, és kérdezz újra.",
+  "errors.voice_not_configured": "A hangbevitel nincs beállítva. Írd be a kérdésedet.",
+  "errors.unsupported_audio": "Ez a hangformátum nem támogatott.",
+  "errors.audio_too_large": "A hangfelvétel legfeljebb 10 MB lehet.",
+  "errors.empty_audio": "Nem készült hangfelvétel. Próbáld újra.",
+  "errors.empty_transcription": "Nem sikerült beszédet felismerni. Próbáld újra, vagy írd be a kérdésedet.",
+  "errors.transcription_too_long": "A felismert kérdés túl hosszú. Vegyél fel rövidebb kérdést.",
+  "errors.transcription_failed": "A beszédfelismerés nem elérhető. Próbáld újra, vagy írd be a kérdésedet.",
+  "errors.microphone_unavailable": "A mikrofon használatához HTTPS vagy localhost elérés és támogatott böngésző szükséges.",
+  "errors.microphone_denied": "A mikrofonengedélyt elutasítottad. Engedélyezd a böngészőben, vagy írd be a kérdésedet.",
+  "errors.recording_failed": "Nem sikerült hangot rögzíteni. Ellenőrizd a mikrofont, vagy írd be a kérdésedet."
 }

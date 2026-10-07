@@ -4,10 +4,14 @@
 
 ## Rövid összefoglaló
 
-A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A jelenlegi változat reszponzív adminfelületet ad a szabályanyagok gyűjtéséhez, feldolgozásához, kereséséhez, ellenőrzéséhez és közzétételéhez. Docker Compose-zal indul, angol és magyar felülettel; az alapértelmezett nyelv az angol.
+A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos játékot választ és kérdez a közzétett szabályokról; a válasz mellett eredeti szabályrészletek és forráshivatkozások jelennek meg. Az admin külön felületen gyűjti, feldolgozza, ellenőrzi és közzéteszi a szabályanyagokat. Docker Compose-zal indul, angol és magyar felülettel; az alapértelmezett nyelv az angol.
 
 ## Funkciók
 
+- Reszponzív kérdezőfelület telefonra, tabletre és számítógépre, játék- és szabálykönyvválasztással.
+- Helyi kulcsszavas keresés API-kulcs nélkül; opcionális OpenAI-magyarázat a választott felületnyelven, ellenőrzött forráshivatkozásokkal.
+- Mikrofonos felvétel és javítható beszédátirat, ha az OpenAI és a biztonságos böngészőkörnyezet elérhető.
+- Eredeti szabályrészek és dokumentumok megnyitása; a hivatkozott oldalakról származó ábrák nagyítása.
 - Játékok felvétele és szerkesztése: kiadás, leírás és a szabálykönyv nyelve.
 - PDF, TXT, Markdown, PNG, JPG és WebP feltöltése vagy szöveg közvetlen beillesztése.
 - PDF-ek és képek feldolgozása Doclinggal és OCR-rel, külön háttérfolyamatban.
@@ -16,27 +20,37 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A jelenlegi
 - Ellenőrzött változat közzététele. Újrafeldolgozáskor a korábban közzétett változat az új jóváhagyásáig megmarad.
 - Választható angol és magyar nyelv az adminfelületen, párbeszédablakokban, ellenőrző üzenetekben, API-hibákban és feldolgozási állapotokban. A böngésző megjegyzi a választást.
 - Tartós adatbázis-, dokumentum- és modellvolume-ok.
-- Szerveroldali munkamenettel védett adminműveletek és dokumentumletöltések.
+- Szerveroldali munkamenettel védett adminműveletek és még nem közzétett anyagok. A közzétett tartalom a beállított helyi címen adminbelépés nélkül olvasható.
 
 ## Bemutatás
 
-1. Jelentkezz be, és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
+### Kérdezz a játékról
+
+1. Nyisd meg a [kérdezőfelületet](http://localhost:8080), válassz játékot, és ellenőrizd a **Használt szabálykönyvek** listát. Csak közzétett változat választható.
+2. Írd be a kérdésedet. Ha a hangbevitel engedélyezett, rögzíts legfeljebb 60 másodpercet, állítsd le, majd ellenőrizd és javítsd a felismert szöveget elküldés előtt.
+3. Válaszd a **Kérdés elküldése** gombot. API-kulcs nélkül a kapcsolódó eredeti szabályrészeket kapod. Beállított OpenAI mellett magyarázat és forrásgombok jelennek meg; hiányos vagy ellentmondó forrásnál ezt jelzi a felület.
+4. A **Forrás megnyitása** gombbal nézd át az eredeti részletet, és nyisd meg a dokumentumát. PDF-nél oldalszám, szövegnél stabil szakaszhivatkozás jelenik meg. Az adott oldalakról származó eredeti ábrák nagyíthatók.
+5. Játék- vagy szabálykönyvváltáskor a korábbi kérdések törlődnek. Az utolsó hat kérdés újratöltésig a memóriában marad; minden kérdés önálló, a korábbi beszélgetés nem ad kontextust. Nyelvváltáskor a már elkészült válasz az eredeti nyelvén marad.
+
+### Gyűjtemény kezelése
+
+1. Nyisd meg az [adminfelületet](http://localhost:8080/admin), jelentkezz be, és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
 2. Nyisd meg a játékot, majd válaszd a **Szabályanyag feltöltése** gombot. Válassz fájlokat vagy a **Szöveg beillesztése** lehetőséget. A Markdown-címek segítik a tagolást.
 3. Hagyd bekapcsolva a **Feldolgozás indítása a feltöltés után** lehetőséget, vagy indítsd el később kézzel. A dokumentum mellett megjelenik a folyamat és az esetleges hiba.
 4. A feldolgozás végén nyisd meg az **Ellenőrzés** nézetet. Keress a szövegben, ellenőrizd a forrásoldalakat és ábrákat; szükség esetén töltsd le az eredetit.
 5. Az **Ellenőriztem, közzéteszem** gombbal hagyd jóvá a változatot. Az **Újrafeldolgozás** új változatot készít, a korábbi közzétett továbbra is elérhető.
 
-A nyelvválasztó a belépésnél, az adminfejlécben és a párbeszédablakokban is elérhető. A felület nyelvének megváltoztatása nem fordítja le és nem módosítja a feltöltött szabálykönyveket, játékneveket, leírásokat vagy képaláírásokat. A szabálykönyv nyelve külön adat.
+A nyelvválasztó a kérdezőfelületen, a belépésnél, az adminfejlécben és a párbeszédablakokban is elérhető. A felület nyelvének megváltoztatása nem fordítja le és nem módosítja a feltöltött szabálykönyveket, játékneveket, leírásokat vagy képaláírásokat. A szabálykönyv nyelve külön adat.
 
 Jelenlegi korlátok: alapértelmezetten 50 MB fájlonként, 100 oldal dokumentumonként, 30 perces feldolgozási időkorlát. Több feltöltött kép külön dokumentumként kerül be. A forráshely a PDF tényleges oldalsorszáma, nem a nyomtatott oldalcímke. Az OCR eredményét embernek is ellenőriznie kell.
 
-Az AI-válaszok, szemantikus embeddingek, automatikus szabálykönyv-fordítás, hangos kérdések és a játékosok kérdezőfelülete későbbi fejlesztések. A teljes szöveges keresés működik, a pgvector a későbbi szemantikus kereséshez elő van készítve.
+A keresés jelenleg kulcsszavas, szókezdetekkel és szomszédos szakaszokkal, így a közeli példák és kivételek is bekerülhetnek. Bekapcsolt AI mellett a kisebb kiválasztott szabálykönyvek teljes szövegét adjuk át, legfeljebb 40 keresési darabig és 32 000 szöveg-/címkarakterig; nagyobb anyagnál korlátozott keresési részleteket. A többnyelvű szemantikus keresés, automatikus szabálykönyv-fordítás, pontos kártya-/ábrakapcsolatok, PWA-telepítés és beszélgetési kontextus későbbi feladatok. A teljes szöveges keresés működik, a pgvector elő van készítve. Nagy idegen nyelvű könyvnél szükség lehet az eredeti szakkifejezésekre. A forrásazonosítókat ellenőrizzük, de a válaszminőséget saját szabálykönyveken is értékelni kell.
 
 ### Összetevők
 
 | Mappa | Feladat |
 | --- | --- |
-| `frontend/` | React, TypeScript és Vite adminfelület; angol/magyar fordítási fájlok |
+| `frontend/` | React, TypeScript és Vite kérdező-/adminfelület; angol/magyar fordítási fájlok |
 | `backend/app/` | FastAPI API, belépés, OCR-feldolgozó és PostgreSQL-alapú worker |
 | `backend/migrations/` | Verziózott adatbázis-migrációk |
 | `backend/tests/` | Backend-integrációs és feldolgozási ellenőrzések |
@@ -70,7 +84,7 @@ sh infra/start.sh
 
 Az indító szükség esetén létrehozza az `infra/.env` fájlt, felépíti az image-eket, és ideiglenes konténerben CUDA-műveletet futtat. Sikeres próba esetén az `infra/compose.gpu.yaml` kiegészítővel indul; egyébként CPU-s konfigurációt választ. A meglévő belépési adatok megmaradnak.
 
-Nyisd meg a [http://localhost:8080](http://localhost:8080) címet. A kezdeti felhasználónév `admin`. A generált jelszót az `infra/.env` fájl `ADMIN_PASSWORD` mezőjében találod. Ezt a fájlt kezeld titokként, és ne tedd verziókezelésbe.
+A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. A kezdeti admin felhasználónév `admin`. A generált jelszót az `infra/.env` fájl `ADMIN_PASSWORD` mezőjében találod. Ezt a fájlt kezeld titokként, és ne tedd verziókezelésbe.
 
 ### 3. Beállítások
 
@@ -87,8 +101,25 @@ Módosítsd az `infra/.env` fájlt, majd futtasd újra az indítót.
 | `MAX_UPLOAD_MB` | `50` | Szerveroldali feltöltési méretkorlát |
 | `MAX_DOCUMENT_PAGES` | `100` | PDF-/képfeldolgozás oldalkorlátja |
 | `PROCESSING_DEVICE` | `auto` | Használható CUDA előnyben; `cpu` esetén CPU-ra kényszerítés |
+| `OPENAI_API_KEY` | Üres | Szerveroldali OpenAI-kulcs; üresen csak helyi szabálykeresés |
+| `OPENAI_ANSWER_MODEL` | `gpt-4.1-mini` | Strukturált kimenetet támogató Responses API-modell |
+| `OPENAI_TRANSCRIPTION_MODEL` | `gpt-transcribe` | Beszédfelismerési modell |
 
 A felület nyelve böngészőben tárolt választás, alapértelmezetten angol. Az API-kliensek `Accept-Language: en` vagy `Accept-Language: hu` fejlécet küldhetnek. A hibák és feldolgozási üzenetek állandó kódot és lefordított szöveget is tartalmaznak. Nem támogatott nyelvnél angolra váltunk.
+
+#### Magyarázat és hangbevitel bekapcsolása
+
+Az `infra/.env` fájlban helyben állítsd be az `OPENAI_API_KEY` értékét. A setup megőrzi a meglévő fájlokat; régebbi fájlhoz szükség esetén add hozzá a fenti három OpenAI-beállítást. A kulcs ne kerüljön a frontend konfigurációjába. A beállítás alkalmazásához csak az API-t kell újralétrehozni:
+
+```sh
+docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api
+```
+
+Frissítsd a kérdezőfelületet. A magyarázathoz a kérdés és a kiválasztott szabályrészletek, a beszédfelismeréshez a hangfelvétel kerül az OpenAI-hoz. A generált válaszokhoz `store=false` beállítást küldünk. Az alkalmazás sem a hangot, sem a kérdéselőzményeket nem menti adatbázisba; a szolgáltatói adatkezelésre az OpenAI-fiókod beállításai érvényesek. Érvényes kulcs, modellhozzáférés és internet szükséges. Szolgáltatói hibánál az eredeti szabályszöveg keresése marad használható.
+
+A kérdezés és beszédfelismerés közös korlátja percenként 12 kérés az API által látott klienscímenként. A mellékelt proxy mögött a háztartási eszközök közös címét használjuk. Legfeljebb két szolgáltatói hívás fut egyszerre, 45 másodperces időkorláttal és automatikus újrapróbálás nélkül; a válasz legfeljebb 1800 kimeneti token. Ez nem pénzügyi költési plafon; a szolgáltatói keretet külön állítsd be.
+
+A mikrofonhoz HTTPS vagy `localhost`, támogatott böngésző és mikrofonengedély kell. Telefonról a szerver IP-jére irányuló egyszerű HTTP-elérésnél írott kérdés működik, mikrofon nem. A felvétel 60 másodperc után leáll; a feltöltési korlát 10 MB. Az átirat elküldés előtt javítható. Valódi Android/iOS eszközön, megbízható helyi HTTPS-sel külön telepítési átvétel szükséges.
 
 ### 4. Kézi Compose-indítás
 
@@ -141,18 +172,23 @@ Előbb indítsd el az alkalmazást, majd:
 # Backendtesztek külön, ideiglenes adatbázissal
 docker compose --env-file infra/.env -f infra/compose.yaml --profile test run --build --no-deps --rm tests
 
-# Böngészős ellenőrzés a futó alkalmazáson: angol, magyar, desktop és mobil
+# Admin/kérdező ellenőrzés: angol, magyar, desktop, mobil és tablet
 docker compose --env-file infra/.env -f infra/compose.yaml --profile e2e run --build --no-deps --rm e2e
 
 # Szintetikus PDF/kép OCR-próba az aktív workeren
 docker compose --env-file infra/.env -f infra/compose.yaml exec -T worker python -m scripts.smoke_processing
 ```
 
-A böngészős képek és a létrehozott tesztjáték azonosítója a `test-results/` mappába kerülnek. A böngészős/OCR-próba `__e2e__` kezdetű játékot hoz létre. Az OCR-próba az azonosítóját `SMOKE_GAME_ID` néven kiírja. Csak ezeket a próbaadatokat távolítsd el a pontos azonosítójukkal:
+A böngészős képek a `test-results/` mappába, a tesztjáték-azonosítók a `created-game.json` (admin) és `player-created-games.json` (kérdező) fájlokba kerülnek. A böngészős AI-válaszok és átiratok tesztválaszok, nem fogyasztanak szolgáltatói keretet; a rögzítés Chromium szintetikus mikrofonját használja. A backendtesztek valódi OpenAI SDK-val, teszt HTTP-válaszokkal futnak. A böngészős/OCR-próba `__e2e__` kezdetű játékokat hoz létre. Az OCR-próba az azonosítóját `SMOKE_GAME_ID` néven kiírja. Csak ezeket a próbaadatokat távolítsd el a pontos azonosítójukkal:
 
 ```powershell
 $testGame = (Get-Content test-results/created-game.json | ConvertFrom-Json).id
 docker compose --env-file infra/.env -f infra/compose.yaml exec -T worker python -m scripts.cleanup_e2e $testGame
+
+$playerGames = Get-Content test-results/player-created-games.json | ConvertFrom-Json
+foreach ($playerGame in $playerGames) {
+    docker compose --env-file infra/.env -f infra/compose.yaml exec -T worker python -m scripts.cleanup_e2e $playerGame
+}
 ```
 
 Linuxon olvasd ki az azonosítót a `test-results/created-game.json` fájlból, és helyettesítsd be a `<test-game-id>` helyére. OCR-próbához a kiírt `SMOKE_GAME_ID` értéket használd:
@@ -171,12 +207,14 @@ A törlőscript visszautasítja a tesztelőtag nélküli játékokat. A backendt
 - **Nem sikerül belépni:** ellenőrizd az `infra/.env` `ADMIN_USERNAME` és `ADMIN_PASSWORD` értékét, majd konfigurációváltozás után indítsd újra az alkalmazást.
 - **Mobilról nem elérhető:** ellenőrizd a bind címet, szerver IP-jét és tűzfalát; a `127.0.0.1` csak a hoston enged hozzáférést.
 
-Az API és a PostgreSQL belső szolgáltatások. A Caddy szolgálja ki a frontendet, és ugyanazon eredeten továbbítja az `/api` kéréseket. Az admincookie HttpOnly, 12 órás; a munkamenet-tokenek hash formában tárolódnak. A worker tartós PostgreSQL-feladatokat foglal megújítható lease-szel és foglalási tokennel, majd a kinyert tartalmat és a sikeres állapotot egy tranzakcióban menti.
+Az API és a PostgreSQL belső szolgáltatások. A Caddy szolgálja ki a frontendet, és ugyanazon eredeten továbbítja az `/api` kéréseket. Az `/api/play` csak közzétett anyagot ad az otthoni játékosoknak; az adminvégpontok belépést kérnek. Az admincookie HttpOnly, 12 órás; a munkamenet-tokenek hash formában tárolódnak. A worker tartós PostgreSQL-feladatokat foglal megújítható lease-szel és foglalási tokennel, majd a kinyert tartalmat és a sikeres állapotot egy tranzakcióban menti.
 
 ## Hivatkozott dokumentáció
 
 - [FastAPI fájlfeltöltés és hibák](https://fastapi.tiangolo.com/tutorial/request-files/)
 - [React context](https://react.dev/reference/react/useContext)
+- [OpenAI strukturált kimenet](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [OpenAI hangfelvétel átírása](https://developers.openai.com/api/docs/guides/speech-to-text)
 - [Docling](https://github.com/docling-project/docling)
 - [pgvector](https://github.com/pgvector/pgvector)
 - [Docker Compose GPU-támogatás](https://docs.docker.com/compose/how-tos/gpu-support/)

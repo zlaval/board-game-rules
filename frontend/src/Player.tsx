@@ -1,0 +1,784 @@
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { Icon, Modal } from "./App";
+import { api } from "./api";
+import { errorMessage, LanguageSwitcher, useI18n } from "./i18n";
+import type {
+  Capabilities,
+  PlayerGame,
+  RuleAnswer,
+  RuleAsset,
+  RuleDocument,
+  RuleSource,
+} from "./player-api";
+import { useVoice } from "./useVoice";
+import "./player.css";
+
+type Turn = { id: number; question: string; answer: RuleAnswer };
+function selectedFromURL() {
+  return new URLSearchParams(window.location.search).get("game") ?? "";
+}
+
+export default function Player() {
+  const { t, language } = useI18n();
+  const [games, setGames] = useState<PlayerGame[]>([]);
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [selected, setSelected] = useState(selectedFromURL);
+  const [documents, setDocuments] = useState<RuleDocument[]>([]);
+  const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [filter, setFilter] = useState("");
+  const [question, setQuestion] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [reload, setReload] = useState(0);
+  const [source, setSource] = useState<RuleSource | null>(null);
+  const [sourceBusy, setSourceBusy] = useState(false);
+  const [sourceError, setSourceError] = useState<unknown>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [figure, setFigure] = useState<RuleAsset | null>(null);
+  const [transcribed, setTranscribed] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  const sourceRequest = useRef<AbortController | null>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const results = useRef<HTMLElement>(null);
+  const voice = useVoice(
+    (text) => {
+      setQuestion(text);
+      setTranscribed(true);
+      input.current?.focus();
+    },
+    language,
+    capabilities?.max_audio_bytes ?? 10 * 1024 * 1024,
+  );
+  const game = games.find((item) => item.id === selected);
+  const visible = games.filter((item) =>
+    `${item.title} ${item.edition}`
+      .toLocaleLowerCase(language)
+      .includes(filter.toLocaleLowerCase(language)),
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      api<PlayerGame[]>("/play/games", { signal: controller.signal }),
+      api<Capabilities>("/play/capabilities", { signal: controller.signal }),
+    ])
+      .then(([items, features]) => {
+        if (controller.signal.aborted) return;
+        setGames(items);
+        setCapabilities(features);
+        setSelected((value) =>
+          items.some((item) => item.id === value) ? value : "",
+        );
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(error);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [reload]);
+
+  useEffect(() => {
+    const pop = () => setSelected(selectedFromURL());
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
+
+  useEffect(() => {
+    request.current?.abort();
+    sourceRequest.current?.abort();
+    voice.cancel();
+    setBusy(false);
+    setTurns([]);
+    setQuestion("");
+    setTranscribed(false);
+    setError(null);
+    setSourceOpen(false);
+    setFigure(null);
+    setDocuments([]);
+    setDocumentIds([]);
+    if (!selected) {
+      setLoadingDocs(false);
+      return;
+    }
+    const controller = new AbortController();
+    setLoadingDocs(true);
+    api<RuleDocument[]>(`/play/games/${selected}/documents`, {
+      signal: controller.signal,
+    })
+      .then((docs) => {
+        if (controller.signal.aborted) return;
+        setDocuments(docs);
+        setDocumentIds(docs.map((doc) => doc.id));
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(error);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingDocs(false);
+      });
+    return () => controller.abort();
+  }, [selected, reload]);
+
+  useEffect(
+    () => () => {
+      request.current?.abort();
+      sourceRequest.current?.abort();
+    },
+    [],
+  );
+
+  function choose(id: string) {
+    setSelected(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("game", id);
+    else url.searchParams.delete("game");
+    window.history.pushState({}, "", url);
+  }
+  function selectDocument(id: string, checked: boolean) {
+    request.current?.abort();
+    voice.cancel();
+    setBusy(false);
+    setError(null);
+    setTurns([]);
+    setDocumentIds((ids) =>
+      checked ? [...ids, id] : ids.filter((item) => item !== id),
+    );
+  }
+  async function ask(event: FormEvent) {
+    event.preventDefault();
+    if (
+      !question.trim() ||
+      !game ||
+      !documentIds.length ||
+      busy ||
+      voice.recording ||
+      voice.requesting ||
+      voice.transcribing
+    )
+      return;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const text = question.trim();
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await api<RuleAnswer>(
+        `/play/games/${selected}/questions`,
+        {
+          method: "POST",
+          signal: controller.signal,
+          body: JSON.stringify({ question: text, document_ids: documentIds }),
+        },
+      );
+      if (controller.signal.aborted) return;
+      setTurns((items) =>
+        [{ id: Date.now(), question: text, answer }, ...items].slice(0, 6),
+      );
+      setQuestion("");
+      setTranscribed(false);
+      requestAnimationFrame(() => results.current?.focus());
+    } catch (error) {
+      if (!controller.signal.aborted) setError(error);
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+  async function openSource(id: string) {
+    sourceRequest.current?.abort();
+    const controller = new AbortController();
+    sourceRequest.current = controller;
+    setSourceOpen(true);
+    setSource(null);
+    setSourceBusy(true);
+    setSourceError(null);
+    try {
+      const row = await api<RuleSource>(
+        `/play/games/${selected}/sources/${id}`,
+        { signal: controller.signal },
+      );
+      if (!controller.signal.aborted) setSource(row);
+    } catch (error) {
+      if (!controller.signal.aborted) setSourceError(error);
+    } finally {
+      if (!controller.signal.aborted) setSourceBusy(false);
+    }
+  }
+  function location(row: RuleSource) {
+    const section = /^section-(\d+)$/.exec(row.source_ref);
+    return row.page !== null
+      ? t("Page {page}", { page: row.page })
+      : t("Section {number}", {
+          number: section ? Number(section[1]) : row.ordinal + 1,
+        });
+  }
+  const locked =
+    busy || voice.recording || voice.transcribing || voice.requesting;
+  return (
+    <div className="player-app">
+      <header className="player-topbar">
+        <a href="/" className="brand">
+          <Icon name="books" />
+          <span>
+            {t("RuleShelf")}
+            <span className="brand-dot">.</span>
+          </span>
+        </a>
+        <div className="player-header-actions">
+          <LanguageSwitcher />
+          <a href="/admin" className="player-admin-link">
+            {t("Manage library")} <Icon name="lock" />
+          </a>
+        </div>
+      </header>
+      <main className="player-main">
+        <div className="player-intro">
+          <span className="eyebrow">
+            {t("MORE PLAYING, LESS PAGE TURNING")}
+          </span>
+          <h1>{t("Ask the rules.")}</h1>
+          <p>{t("Choose your game. Find the rule. Keep playing.")}</p>
+        </div>
+        <div className="player-layout">
+          <aside className="player-library" aria-label={t("Choose a game")}>
+            <h2>{t("Your games")}</h2>
+            <p>{t("Only reviewed and published rulebooks appear here.")}</p>
+            <label className="player-search">
+              <span className="sr-only">{t("Search games")}</span>
+              <Icon name="search" />
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder={t("Search games…")}
+              />
+            </label>
+            {loading ? (
+              <p className="loading">{t("Loading collection…")}</p>
+            ) : games.length === 0 ? (
+              <div className="player-empty-library">
+                <Icon name="books" />
+                <strong>{t("No published games yet")}</strong>
+                <p>
+                  {t(
+                    "Add a game and publish its rulebook in the admin interface to start asking questions.",
+                  )}
+                </p>
+                <a href="/admin" className="button secondary">
+                  {t("Manage library")}
+                </a>
+              </div>
+            ) : (
+              <>
+                <label className="player-mobile-select">
+                  {t("Choose a game")}
+                  <select
+                    aria-label={t("Choose a game")}
+                    value={selected}
+                    onChange={(event) => choose(event.target.value)}
+                  >
+                    <option value="">{t("Select a game…")}</option>
+                    {games.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                        {item.edition ? ` · ${item.edition}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="player-game-list">
+                  {visible.map((item, index) => (
+                    <button
+                      className={`player-game ${selected === item.id ? "selected" : ""}`}
+                      key={item.id}
+                      onClick={() => choose(item.id)}
+                      aria-pressed={selected === item.id}
+                    >
+                      <span className={`player-game-icon color-${index % 3}`}>
+                        <Icon name="books" />
+                      </span>
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.edition || t("Published rules")}</small>
+                      </span>
+                      <Icon name="arrow" />
+                    </button>
+                  ))}
+                  {visible.length === 0 && (
+                    <p>{t("No games match your search.")}</p>
+                  )}
+                </div>
+              </>
+            )}
+            <button
+              className="player-refresh"
+              onClick={() => setReload((value) => value + 1)}
+              disabled={loading || locked}
+            >
+              <Icon name="refresh" />
+              {t("Refresh library")}
+            </button>
+          </aside>
+          <section
+            className="player-question-area"
+            aria-label={t("Rule questions")}
+          >
+            {!game ? (
+              <div className="player-welcome">
+                <span className="player-welcome-star" aria-hidden="true">
+                  ✳
+                </span>
+                <h2>{t("A good answer starts with the right game.")}</h2>
+                <p>
+                  {t(
+                    "Choose a game from your library, then ask about a turn, a card, or an exception.",
+                  )}
+                </p>
+                <div className="player-example">
+                  <Icon name="search" />
+                  <span>{t("For example: Can I move after an attack?")}</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="player-selected">
+                  <div>
+                    <span className="eyebrow">{t("YOU ARE PLAYING")}</span>
+                    <h2>{game.title}</h2>
+                    <p>{game.edition}</p>
+                  </div>
+                  <span className="player-reviewed">
+                    <Icon name="check" />
+                    {t("Published rules")}
+                  </span>
+                </div>
+                <details className="player-rule-selection">
+                  <summary>
+                    {t("Rulebooks in use")}{" "}
+                    <span>
+                      {documentIds.length}/{documents.length}
+                    </span>
+                  </summary>
+                  {loadingDocs ? (
+                    <p>{t("Loading rulebooks…")}</p>
+                  ) : (
+                    documents.map((doc) => (
+                      <label className="checkbox" key={doc.id}>
+                        <input
+                          type="checkbox"
+                          checked={documentIds.includes(doc.id)}
+                          onChange={(event) =>
+                            selectDocument(doc.id, event.target.checked)
+                          }
+                          disabled={locked}
+                        />
+                        <span>{doc.filename}</span>
+                      </label>
+                    ))
+                  )}
+                  <p>
+                    {t(
+                      "Select only the rulebooks that apply to this game session.",
+                    )}
+                  </p>
+                </details>
+                {!capabilities?.explanations && capabilities && (
+                  <div className="player-mode-note">
+                    <Icon name="search" />
+                    <p>
+                      {t(
+                        "Search mode: matching original rule sections are available. AI explanations and voice input become available when configured by the administrator.",
+                      )}
+                    </p>
+                  </div>
+                )}
+                {capabilities?.explanations && (
+                  <p className="player-cloud-note">
+                    {t(
+                      "For explanations, your question and selected rule excerpts are sent to OpenAI.",
+                    )}
+                  </p>
+                )}
+                <form className="player-composer" onSubmit={ask}>
+                  <label htmlFor="player-question">{t("Your question")}</label>
+                  <textarea
+                    id="player-question"
+                    ref={input}
+                    value={question}
+                    onChange={(event) => {
+                      setQuestion(event.target.value);
+                      setTranscribed(false);
+                    }}
+                    maxLength={1000}
+                    rows={3}
+                    placeholder={t(
+                      "What would you like to know about the rules?",
+                    )}
+                    disabled={locked || loadingDocs}
+                  />
+                  {transcribed && (
+                    <p className="player-transcribed" role="status">
+                      {t(
+                        "Check the recognized text and edit it before sending your question.",
+                      )}
+                    </p>
+                  )}
+                  <div className="player-composer-actions">
+                    <button
+                      type="button"
+                      className={`button secondary player-microphone ${voice.recording ? "recording" : ""}`}
+                      disabled={
+                        !capabilities?.transcription ||
+                        !voice.supported ||
+                        busy ||
+                        voice.requesting ||
+                        voice.transcribing ||
+                        loadingDocs
+                      }
+                      onClick={voice.recording ? voice.stop : voice.start}
+                    >
+                      <svg
+                        className="icon"
+                        viewBox="0 0 24 24"
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        aria-hidden="true"
+                      >
+                        <rect x="9" y="3" width="6" height="12" rx="3" />
+                        <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+                      </svg>
+                      {voice.recording
+                        ? t("Stop recording")
+                        : voice.transcribing
+                          ? t("Transcribing…")
+                          : t("Use microphone")}
+                    </button>
+                    {locked && (
+                      <button
+                        type="button"
+                        className="player-cancel"
+                        onClick={() => {
+                          request.current?.abort();
+                          setBusy(false);
+                          voice.cancel();
+                        }}
+                      >
+                        {t("Cancel")}
+                      </button>
+                    )}
+                    <span className="player-character-count">
+                      {question.length}/1000
+                    </span>
+                    <button
+                      className="button primary"
+                      disabled={
+                        locked ||
+                        loadingDocs ||
+                        !question.trim() ||
+                        !documentIds.length
+                      }
+                    >
+                      {busy ? t("Finding the rule…") : t("Ask question")}
+                      <Icon name="arrow" />
+                    </button>
+                  </div>
+                  <p className="player-input-help">
+                    {voice.recording
+                      ? t("Recording… Stop when finished. Maximum 60 seconds.")
+                      : !capabilities?.transcription
+                        ? t(
+                            "Voice input is currently unavailable. You can type your question.",
+                          )
+                        : !voice.supported
+                          ? t(
+                              "Microphone access requires HTTPS or localhost and a supported browser.",
+                            )
+                          : t(
+                              "Voice recordings are sent to OpenAI for transcription and are not saved by this app.",
+                            )}
+                  </p>
+                  {!loadingDocs && !documentIds.length && (
+                    <p className="player-input-help">
+                      {t(
+                        "Select at least one published rulebook to ask a question.",
+                      )}
+                    </p>
+                  )}
+                  {!!voice.error && (
+                    <p className="error" role="alert">
+                      {errorMessage(voice.error, t)}
+                    </p>
+                  )}
+                </form>
+                {busy && (
+                  <p className="player-working" role="status">
+                    {t("Checking the selected rulebooks…")}
+                  </p>
+                )}
+                <section
+                  className="player-results"
+                  ref={results}
+                  tabIndex={-1}
+                  aria-label={t("Questions and answers")}
+                  aria-busy={busy}
+                >
+                  {turns.length > 0 && (
+                    <div className="player-history-title">
+                      <h3>{t("Questions and answers")}</h3>
+                      <button onClick={() => setTurns([])} disabled={busy}>
+                        {t("Clear questions")}
+                      </button>
+                    </div>
+                  )}
+                  {turns.map(({ id, question: text, answer }) => (
+                    <article className="player-turn" key={id}>
+                      <div className="player-user-question">
+                        <Icon name="search" />
+                        <h3>{text}</h3>
+                      </div>
+                      <div className="player-answer" lang={answer.language}>
+                        <span
+                          className={`player-answer-status ${answer.status}`}
+                        >
+                          <Icon
+                            name={
+                              answer.status === "answered" ? "check" : "file"
+                            }
+                          />
+                          {t(`answer.${answer.status}`)}
+                        </span>
+                        {answer.fallback_code && (
+                          <p className="player-fallback">
+                            {t(`player.${answer.fallback_code}`)}
+                          </p>
+                        )}
+                        {answer.status === "conflicting" && (
+                          <p className="player-fallback">
+                            {t(
+                              "The selected rulebooks disagree. Check the cited sources before deciding.",
+                            )}
+                          </p>
+                        )}
+                        {answer.paragraphs.map((paragraph, index) => (
+                          <div className="player-paragraph" key={index}>
+                            <p>{paragraph.text}</p>
+                            <div className="player-citations">
+                              {paragraph.source_ids.map((sourceId) => {
+                                const row = answer.sources.find(
+                                  (source) => source.id === sourceId,
+                                );
+                                return (
+                                  row && (
+                                    <button
+                                      key={sourceId}
+                                      onClick={() => openSource(sourceId)}
+                                    >
+                                      {t("Source {number}", {
+                                        number: answer.sources.indexOf(row) + 1,
+                                      })}{" "}
+                                      · {location(row)}
+                                    </button>
+                                  )
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                        {answer.language !== language &&
+                          answer.paragraphs.length > 0 && (
+                            <p className="player-input-help">
+                              {t(
+                                "This answer keeps its original language. Ask again to receive an answer in the current interface language.",
+                              )}
+                            </p>
+                          )}
+                        {answer.status === "no_matches" && (
+                          <p>
+                            {t(
+                              "No matching rule section was found. Try the exact name of a card or action, or check the selected rulebooks.",
+                            )}
+                          </p>
+                        )}
+                        {answer.status === "insufficient" && (
+                          <p>
+                            {t(
+                              "The available excerpts do not support a reliable answer. Add details or check whether the relevant rulebook is published.",
+                            )}
+                          </p>
+                        )}
+                        {answer.sources.length > 0 && (
+                          <div className="player-sources">
+                            <h4>{t("Original rule sections")}</h4>
+                            {answer.sources.map((row, index) => (
+                              <details
+                                key={row.id}
+                                open={answer.status === "search_results"}
+                              >
+                                <summary>
+                                  <span className="player-source-number">
+                                    {index + 1}
+                                  </span>
+                                  <span>
+                                    <strong>{row.heading || t("Rules")}</strong>
+                                    <small>
+                                      {row.filename} · {location(row)}
+                                    </small>
+                                  </span>
+                                </summary>
+                                <p
+                                  className="player-source-content"
+                                  lang={row.language}
+                                >
+                                  {row.content}
+                                </p>
+                                <button onClick={() => openSource(row.id)}>
+                                  <Icon name="file" />
+                                  {t("Open source")}
+                                </button>
+                              </details>
+                            ))}
+                          </div>
+                        )}
+                        {answer.assets.length > 0 && (
+                          <div className="player-figures">
+                            <h4>{t("Original figures from source pages")}</h4>
+                            <p>
+                              {t(
+                                "These figures come from the cited pages. Their exact connection to the question still needs checking.",
+                              )}
+                            </p>
+                            <div>
+                              {answer.assets.map((asset) => (
+                                <button
+                                  key={asset.id}
+                                  className="player-figure"
+                                  onClick={() => setFigure(asset)}
+                                  aria-label={t("Enlarge figure: {caption}", {
+                                    caption:
+                                      asset.caption ||
+                                      t("Page {page}", { page: asset.page }),
+                                  })}
+                                >
+                                  <img
+                                    src={`/api/play/games/${selected}/assets/${asset.id}`}
+                                    alt={
+                                      asset.caption ||
+                                      t("Original figure from the rulebook")
+                                    }
+                                    loading="lazy"
+                                  />
+                                  <span>
+                                    {asset.caption || t("Original figure")} ·{" "}
+                                    {t("Page {page}", { page: asset.page })}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                  {!turns.length && !busy && (
+                    <div className="player-source-promise">
+                      <Icon name="file" />
+                      <p>
+                        {t(
+                          "Answers include the original rule sections, so you can check the source yourself.",
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+            {!!error && (
+              <div className="player-error error" role="alert">
+                <p>{errorMessage(error, t)}</p>
+                <button
+                  className="button secondary"
+                  onClick={() => setReload((value) => value + 1)}
+                  disabled={busy}
+                >
+                  {t("Refresh library")}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+        <footer className="player-footer">
+          <span>
+            {t("RuleShelf")} · {t("A place for every rule.")}
+          </span>
+          <span>{t("Your table. Your games. Your rulebooks.")}</span>
+        </footer>
+      </main>
+      {sourceOpen && (
+        <Modal
+          title={t("Original rule section")}
+          eyebrow="RULESHELF / PLAY"
+          onClose={() => {
+            sourceRequest.current?.abort();
+            setSourceOpen(false);
+          }}
+          wide
+        >
+          <div className="player-source-modal">
+            {sourceBusy && <p role="status">{t("Loading source…")}</p>}
+            {!!sourceError && (
+              <p className="error" role="alert">
+                {errorMessage(sourceError, t)}
+              </p>
+            )}
+            {source && (
+              <>
+                <h3>{source.heading || t("Rules")}</h3>
+                <p className="player-input-help">
+                  {source.filename} · {location(source)}
+                </p>
+                <p className="player-source-content" lang={source.language}>
+                  {source.content}
+                </p>
+                <a
+                  className="button secondary"
+                  href={`/api/play/games/${selected}/documents/${source.document_id}/original${source.page ? `#page=${source.page}` : ""}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Icon name="file" />
+                  {t("Open original document")}
+                </a>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+      {figure && (
+        <Modal
+          title={figure.caption || t("Original figure")}
+          eyebrow="RULESHELF / PLAY"
+          onClose={() => setFigure(null)}
+          wide
+        >
+          <div className="player-image-modal">
+            <img
+              src={`/api/play/games/${selected}/assets/${figure.id}`}
+              alt={figure.caption || t("Original figure from the rulebook")}
+            />
+            <p>{t("Page {page}", { page: figure.page })}</p>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}

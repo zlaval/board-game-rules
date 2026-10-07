@@ -21,7 +21,7 @@ async function noOverflow() {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, 'Page overflows horizontally')
 }
 try {
-  await page.goto(base)
+  await page.goto(`${base}/admin`)
   await page.getByRole('heading', { name: 'Welcome to RuleShelf' }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'English is the default even with a Hungarian browser locale')
   await page.getByLabel('Username', { exact: true }).fill(process.env.ADMIN_USERNAME ?? 'admin')
@@ -116,7 +116,7 @@ try {
 
   const fresh = await browser.newContext({ locale: 'hu-HU' })
   const freshPage = await fresh.newPage()
-  await freshPage.goto(base)
+  await freshPage.goto(`${base}/admin`)
   await freshPage.getByRole('heading', { name: 'Welcome to RuleShelf' }).waitFor()
   await fresh.close()
   assert.ok(requestLanguages.has('en') && requestLanguages.has('hu'), 'API requests must carry both chosen languages')

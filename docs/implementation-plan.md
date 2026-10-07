@@ -1,6 +1,8 @@
 # Társasjáték-szabálykereső — implementációs terv
 
-Állapot: tervezett, implementáció még nem indult.
+Állapot: az admin, infrastruktúra, tartós PDF-/képfeldolgozás, GPU/CPU-választás és kétnyelvű felület elkészült. Az első felhasználói kérdezőfelület és a forrásos válaszadó API is implementálva van; élő OpenAI-átvételhez konfigurált kulcs szükséges.
+
+A kérdezőfelület a `/`, az admin a `/admin` útvonalon érhető el. Játék- és közzétett szabálykönyvválasztás, helyi keresés, opcionális OpenAI-magyarázat, forrás-/ábramegnyitás és javítható hangátirat működik. A kérdések önállóak; a szemantikus keresés, szabálykönyv-fordítás, beszélgetési kontextus és PWA még hátravan. A böngészős hangpróba szintetikus mikrofont és tesztátiratot használ; valódi telefonos HTTPS-átvétel még szükséges. Részletek: `docs/player-validation.md`.
 
 ## Cél és kiindulás
 

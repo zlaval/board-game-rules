@@ -86,7 +86,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     document.documentElement.lang = language;
-    document.title = `${t("RuleShelf")} · Admin`;
     document
       .querySelector('meta[name="description"]')
       ?.setAttribute("content", t("Board game rulebooks, all in one place."));

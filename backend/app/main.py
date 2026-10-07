@@ -22,6 +22,7 @@ from . import config
 from .db import connect
 from .storage import storage_path
 from .i18n import api_error, error_response, localize_version, request_language
+from .play import router as play_router
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="RuleShelf admin API", version="0.1.0", lifespan=lifespan)
+app.include_router(play_router)
 login_attempts = defaultdict(deque)
 login_lock = threading.Lock()
 
