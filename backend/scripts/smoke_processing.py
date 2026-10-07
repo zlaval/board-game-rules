@@ -12,6 +12,8 @@ from uuid import uuid4
 from PIL import Image, ImageDraw, ImageFont
 
 from app import config
+from app.db import connect
+from app.storage import storage_path
 
 
 def create_pdf(card: Image.Image) -> bytes:
@@ -111,6 +113,17 @@ def main():
                 assert "cards" in content, content
                 assert current["page_count"] == 1
                 assert all(c["page"] == 1 for c in preview["chunks"])
+                with connect() as db:
+                    job = db.execute(
+                        "SELECT lease_token FROM jobs WHERE version_id=%s",
+                        (current["version_id"],),
+                    ).fetchone()
+                runtime = json.loads(
+                    storage_path(
+                        f"processed/{current['version_id']}/{job['lease_token']}/acceleration.json"
+                    ).read_text()
+                )
+                print(f"RUNTIME {filename}: {runtime}", flush=True)
                 for asset in preview["assets"]:
                     with opener.open(base + f"/assets/{asset['id']}") as response:
                         assert response.read(8) == b"\x89PNG\r\n\x1a\n"

@@ -41,3 +41,15 @@ Az OCR és az ábrakinyerés ellenőrzése szintetikus bemeneteken történt. Sa
 
 Az alkalmazás helyi fejlesztői HTTP-elérése `http://localhost:8080`. A Proxmoxra költöztetéshez és a mobilos éles használathoz szükséges HTTPS-konfiguráció a README-ben leírt következő üzemeltetési lépés.
 
+## GPU-feldolgozás és CPU-fallback
+
+- A worker CUDA-s PyTorch 2.14.1 / torchvision 0.29.1 csomagokkal épül; az alapértelmezett választás automatikus.
+- Az új PowerShell/Linux indítók valódi CUDA-művelettel ellenőrzik a konténer GPU-képességét. NVIDIA GPU esetén a Compose GPU-kiegészítőjét választják; GPU nélkül CPU-n indítanak.
+- A Docling és a RapidOCR torch backend GPU-n fut. GPU hiányában ONNX Runtime CPU OCR-t használunk; GPU-s konverziós hiba után a teljes konverziót egyszer CPU-n újrapróbáljuk.
+- A modellek súlyfájljai SHA-256 ellenőrzéssel, atomikus mentéssel kerülnek a tartós cache-be. A wheel csomaggal érkező CPU-modelleket letöltés nélkül használjuk fel.
+- Valódi PDF és PNG feldolgozás a futó API-workeren, NVIDIA RTX 3090 GPU-val: sikeres. Mindkét `acceleration.json` eszköze `cuda:0`, OCR backendje `torch`, `cpu_fallback=false`. Az oldalszámok és a PDF két eredeti ábrája megmaradtak.
+- Ugyanaz a végleges CUDA-s worker image GPU-átadás nélkül, külön ideiglenes konténerben: a PNG OCR sikeres, automatikusan `cpu` / `onnxruntime` eszközzel és backenddel.
+- A GPU-s próba során feltárt RapidOCR Path-konfigurációs hibát és lejárt ModelScope CDN-linket javítottuk.
+- 24 backendteszt: sikeres. Az új esetek a CUDA kernelpróbát, GPU-hiányt/hibát, CPU-kényszerítést, egyszeri fallbacket, CPU-hiba továbbadását, sérült cache javítását, checksum-ellenőrzést és atomikus letöltést ellenőrzik.
+- Ruff ellenőrzés, PowerShell és Linux shell indítószintaxis: sikeres. A PowerShell indító ténylegesen GPU-val indította az alkalmazást.
+

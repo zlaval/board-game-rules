@@ -1,0 +1,10 @@
+# Optional override: the launchers select this only after a successful CUDA probe.
+services:
+  worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

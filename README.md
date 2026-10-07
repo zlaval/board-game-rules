@@ -7,20 +7,40 @@ Otthon futtatható társasjáték-szabálygyűjtemény. Az első megvalósított
 PowerShellből, a projekt gyökerében:
 
 ```powershell
-./infra/setup.ps1
-docker compose --env-file infra/.env -f infra/compose.yaml up --build -d
+./infra/start.ps1
 ```
 
 Linuxon:
 
 ```sh
-sh infra/setup.sh
-docker compose --env-file infra/.env -f infra/compose.yaml up --build -d
+sh infra/start.sh
 ```
 
 Adminfelület: <http://localhost:8080>. Felhasználónév: `admin`. A generált jelszó az `infra/.env` fájl `ADMIN_PASSWORD` mezője. A setup meglévő `.env` fájlt nem ír felül. Titkokat ne verziókezelj.
 
-Az első build a CPU-s dokumentumfeldolgozó függőségek miatt több percet igényelhet. A PDF-/képfeldolgozás első indításakor a Docling/OCR modellek letöltése további időt vehet igénybe és internetet igényel. A modellek külön Docker-volume-ban maradnak meg. A szövegfeldolgozásnak nincs modellletöltési igénye.
+Az első build a CUDA-támogatással telepített dokumentumfeldolgozó függőségek miatt több percet és több GB tárhelyet igényelhet. A PDF-/képfeldolgozás első indításakor a Docling/OCR modellek letöltése további időt vehet igénybe és internetet igényel. A modellek külön Docker-volume-ban maradnak meg. A szövegfeldolgozásnak nincs modellletöltési igénye.
+
+## GPU és CPU tartalék
+
+A `start.ps1` és `start.sh` felépíti az image-eket, majd ideiglenes konténerben ellenőrzi, hogy a worker ténylegesen tud-e CUDA-műveletet futtatni. Sikeres ellenőrzéskor az `infra/compose.gpu.yaml` kiegészítéssel átadja az NVIDIA GPU-kat a workernek. GPU vagy működő Docker GPU-támogatás hiányában a normál Compose-konfigurációval, CPU-n indul.
+
+A worker alapértelmezetten `PROCESSING_DEVICE=auto`: minden PDF-/képfeldolgozás előtt ellenőrzi a GPU-t. NVIDIA CUDA esetén a Docling modellek és a RapidOCR PyTorch backend GPU-n futnak. GPU hiányában az OCR ONNX Runtime CPU backendre vált. Ha a GPU-s konverzió hibázik, például betelik a videomemória, a teljes konverziót egyszer CPU-n újrapróbálja. A CPU-n is sikertelen feldolgozás a megszokott hibaállapotba kerül. Az `infra/.env` fájlban `PROCESSING_DEVICE=cpu` beállítással a CPU kézzel is kényszeríthető; a worker újraindítása szükséges.
+
+A feldolgozásonkénti `processing.log` rögzíti az eszközt és a fallback okát; az `acceleration.json` a ténylegesen sikeres eszközt és OCR backendet tartalmazza. A RapidOCR CPU- és GPU-modelljei a tartós `/models/docling/rapidocr` cache-ben tárolódnak. A súlyfájlokat a RapidOCR registry SHA-256 értékeivel ellenőrizzük, és csak teljes letöltés után, atomikusan mentjük. A csomaggal érkező CPU-modelleket hálózati letöltés nélkül átvesszük. A GPU-modellek első letöltése internetet igényel; friss ModelScope CDN-hivatkozással és egy újrapróbálkozással kezeljük a lejárt letöltési URL-eket.
+
+GPU-s kézi indítás:
+
+```sh
+docker compose --env-file infra/.env -f infra/compose.yaml -f infra/compose.gpu.yaml up --build -d
+```
+
+GPU nélküli kézi indítás:
+
+```sh
+docker compose --env-file infra/.env -f infra/compose.yaml up --build -d
+```
+
+A sima Compose-indítás nem ad át GPU-t, ezért az automatikus választáshoz a `start` scriptet használd. GPU-s worker újralétrehozásakor a kézi parancsokban is szerepeljen a GPU-kiegészítő fájl. Linux/Proxmox esetén NVIDIA driver és NVIDIA Container Toolkit szükséges a Docker hoston; virtuális gépben a GPU passthrough-t is be kell állítani. Windows Docker Desktop esetén WSL2 Linux konténerek és támogatott NVIDIA driver szükséges. A mostani image NVIDIA CUDA-t támogat; AMD/Intel GPU-hoz külön runtime szükséges. A CUDA-csomag GPU nélkül is működik CPU-n.
 
 ## Adminfolyamat
 
@@ -91,5 +111,7 @@ Az éles Proxmox-telepítéshez belső névfeloldás és megbízható HTTPS szü
 - [React effektusok](https://react.dev/learn/synchronizing-with-effects)
 - [PostgreSQL / pgvector](https://github.com/pgvector/pgvector)
 - [Docker Compose indítási sorrend](https://docs.docker.com/compose/how-tos/startup-order/)
+- [Docker Compose GPU-támogatás](https://docs.docker.com/compose/how-tos/gpu-support/)
+- [Docling hardveres gyorsítás](https://docling-project.github.io/docling/usage/accelerator/)
 - [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
 

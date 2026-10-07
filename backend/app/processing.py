@@ -1,12 +1,15 @@
 """Document extraction runs in an isolated subprocess supervised by the worker."""
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
 from uuid import uuid4
 
 from .config import MAX_DOCUMENT_PAGES, MAX_UPLOAD_BYTES
+from .acceleration import convert_with_fallback
+from .ocr_models import prepare_ocr_models
 
 
 def progress(output: Path, stage: str, percent: int):
@@ -62,31 +65,45 @@ def extract_text(path: Path):
 
 
 def extract_docling(path: Path, output: Path):
-    from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+    from docling.datamodel.accelerator_options import AcceleratorOptions
     from docling.datamodel.base_models import ConversionStatus, InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions, RapidOcrOptions
     from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
 
-    progress(output, "OCR és dokumentummodellek betöltése", 20)
-    options = PdfPipelineOptions()
-    options.accelerator_options = AcceleratorOptions(num_threads=2, device=AcceleratorDevice.CPU)
-    options.ocr_options = RapidOcrOptions()
-    options.generate_page_images = True
-    options.generate_picture_images = True
-    options.images_scale = 1.5
-    converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=options),
-            InputFormat.IMAGE: ImageFormatOption(pipeline_options=options),
-        }
-    )
-    result = converter.convert(
-        path, max_num_pages=MAX_DOCUMENT_PAGES, max_file_size=MAX_UPLOAD_BYTES
-    )
-    if result.status != ConversionStatus.SUCCESS:
-        raise ValueError(
-            "A dokumentum feldolgozása nem volt teljes. Ellenőrizd a fájlt és az oldalkorlátot."
+    def convert(device):
+        progress(output, f"OCR és dokumentummodellek betöltése ({device})", 20)
+        options = PdfPipelineOptions()
+        options.accelerator_options = AcceleratorOptions(num_threads=2, device=device)
+        # ONNX Runtime is CPU-only here; torch shares the CUDA-enabled PyTorch runtime.
+        backend = "onnxruntime" if device == "cpu" else "torch"
+        cache = (
+            Path(os.environ.get("DOCLING_CACHE_DIR", str(Path.home() / ".cache/docling")))
+            / "rapidocr"
         )
+        options.ocr_options = RapidOcrOptions(
+            backend=backend,
+            **prepare_ocr_models(cache, backend),
+            rapidocr_params={"Global.model_root_dir": cache},
+        )
+        options.generate_page_images = True
+        options.generate_picture_images = True
+        options.images_scale = 1.5
+        converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=options),
+                InputFormat.IMAGE: ImageFormatOption(pipeline_options=options),
+            }
+        )
+        result = converter.convert(
+            path, max_num_pages=MAX_DOCUMENT_PAGES, max_file_size=MAX_UPLOAD_BYTES
+        )
+        if result.status != ConversionStatus.SUCCESS:
+            raise ValueError(
+                "A dokumentum feldolgozása nem volt teljes. Ellenőrizd a fájlt és az oldalkorlátot."
+            )
+        return result
+
+    result = convert_with_fallback(convert, output)
     doc = result.document
     doc.save_as_json(output / "document.json")
     (output / "document.md").write_text(doc.export_to_markdown(), encoding="utf-8")

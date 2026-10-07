@@ -44,10 +44,13 @@ services:
     init: true
 
   worker:
+    image: board-game-rules-worker
     build:
       context: ..
       dockerfile: infra/Dockerfile.worker
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      PROCESSING_DEVICE: ${PROCESSING_DEVICE:-auto}
     volumes:
       - documents:/data
       - models:/models
