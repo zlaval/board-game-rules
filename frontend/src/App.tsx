@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api } from "./api";
 import type { Document, Game, Preview } from "./api";
+import ProcessingLog from "./ProcessingLog";
 
 type IconName =
   | "books"
@@ -312,7 +313,9 @@ function UploadForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language: interfaceLanguage } = useI18n();
+  const [sourceLanguage, setSourceLanguage] = useState(game.language);
+  const [usageLanguage, setUsageLanguage] = useState<string>(interfaceLanguage);
   const [mode, setMode] = useState<"file" | "text">("file");
   const [files, setFiles] = useState<File[]>([]);
   const [drag, setDrag] = useState(false);
@@ -328,6 +331,7 @@ function UploadForm({
     setMessage("");
     const form = new FormData(event.currentTarget);
     const language = String(form.get("language"));
+    const usage_language = String(form.get("usage_language"));
     let completed = 0;
     try {
       validateForm(event.currentTarget);
@@ -346,6 +350,7 @@ function UploadForm({
           const data = new FormData();
           data.set("file", file);
           data.set("language", language);
+          data.set("usage_language", usage_language);
           document = await api(`/games/${game.id}/documents`, {
             method: "POST",
             body: data,
@@ -357,6 +362,7 @@ function UploadForm({
               title: form.get("title"),
               content: form.get("content"),
               language,
+              usage_language,
             }),
           });
         }
@@ -486,16 +492,41 @@ function UploadForm({
             </p>
           </>
         )}
-        <label>
-          {t("Document language")}
-          <select
-            name="language"
-            aria-label={t("Document language")}
-            defaultValue={game.language}
-          >
-            <LanguageOptions />
-          </select>
-        </label>
+        <div className="form-grid">
+          <label>
+            {t("Rulebook language")}
+            <select
+              name="language"
+              aria-label={t("Rulebook language")}
+              value={sourceLanguage}
+              onChange={(event) => setSourceLanguage(event.target.value)}
+              disabled={busy}
+            >
+              <LanguageOptions />
+            </select>
+          </label>
+          <label>
+            {t("Use language")}
+            <select
+              name="usage_language"
+              aria-label={t("Use language")}
+              value={usageLanguage}
+              onChange={(event) => setUsageLanguage(event.target.value)}
+              disabled={busy}
+            >
+              <option value="en">{t("English")}</option>
+              <option value="hu">{t("Hungarian")}</option>
+              <option value="both">{t("English and Hungarian")}</option>
+            </select>
+          </label>
+        </div>
+        <p className="field-note">
+          {t(
+            sourceLanguage.toLowerCase().split("-")[0] === usageLanguage
+              ? "No translation needed. The original rules will be processed and indexed."
+              : "Only selected languages that differ from the rulebook language will be translated.",
+          )}
+        </p>
         <label className="checkbox">
           <input
             type="checkbox"
@@ -1035,7 +1066,16 @@ export default function App() {
                         </div>
                         <p className="document-meta">
                           {t(languageName[doc.language] ?? doc.language)} ·{" "}
-                          {fileSize(doc.size_bytes)}
+                          {t("Use: {language}", {
+                            language:
+                              doc.usage_language === "both"
+                                ? t("English and Hungarian")
+                                : t(
+                                    languageName[doc.usage_language] ??
+                                      doc.usage_language,
+                                  ),
+                          })}{" "}
+                          · {fileSize(doc.size_bytes)}
                           {doc.chunk_count
                             ? ` · ${t("{count} rule section(s)", { count: doc.chunk_count })}`
                             : ""}
@@ -1164,6 +1204,7 @@ export default function App() {
                   )}
                 </p>
               </div>
+              <ProcessingLog gameId={game.id} />
             </>
           )}
         </div>

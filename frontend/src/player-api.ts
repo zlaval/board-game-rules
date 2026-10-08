@@ -43,6 +43,7 @@ export type RuleAnswer = {
   sources: RuleSource[];
   assets: RuleAsset[];
   fallback_code: string | null;
+  timings?: { search_ms: number; explanation_ms: number; total_ms: number };
 };
 export type Capabilities = {
   explanations: boolean;

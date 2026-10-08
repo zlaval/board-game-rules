@@ -15,7 +15,8 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 - Create and edit games, editions, descriptions and rulebook language metadata.
 - Upload PDF, TXT, Markdown, PNG, JPG and WebP files, or paste text directly.
 - Process PDFs and images with Docling and OCR in a separate background worker.
-- With OpenAI configured, translate extracted rules into English and Hungarian and build a multilingual semantic index in PostgreSQL/pgvector. Original text and page references are retained.
+- Follow processing in a terminal-style panel with timestamps, current step and elapsed time, batch counts, API waits, model names and failures.
+- With OpenAI configured, translate extracted rules into selected usage languages and build a multilingual semantic index in PostgreSQL/pgvector. Matching source/usage languages skip translation. Original text and page references are retained.
 - Apply **AI processing** to an already extracted rulebook without repeating OCR. Review its translations before publishing the replacement.
 - Prefer an available NVIDIA GPU; automatically use CPU when no usable GPU is available, and retry failed GPU conversion once on CPU.
 - Review extracted rule sections with source page numbers, search them by keyword, and inspect original figures.
@@ -38,7 +39,7 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 
 1. Open [the admin interface](http://localhost:8080/admin) and choose **New game**. Enter the title, edition, rulebook language and optional description.
 2. Open the game and choose **Upload rule material**. Select files or use **Paste text**. Markdown headings help organize sections.
-3. Leave **Start processing after upload** enabled, or start processing manually later. Progress and failures appear on each document.
+3. Choose **Rulebook language** and **Use language**. Matching languages skip translation. Leave **Start processing after upload** enabled, or start processing manually later. Follow the **Processing log** at the bottom of the game page.
 4. Choose **Review** when processing finishes. Search the extracted text, check source pages, inspect figures and download the original if needed.
 5. Choose **Reviewed — publish** to approve the version. Later, **Reprocess** creates a separate version while the published one remains available.
 
@@ -46,7 +47,7 @@ The language selector is available in the shared header and inside dialogs. Chan
 
 Current limits: 50 MB per file by default, 100 pages per document, and a 30-minute processing timeout. Multiple uploaded images currently become separate documents. Source references use actual PDF page positions rather than printed page labels. OCR output still needs human review.
 
-Retrieval combines multilingual keyword matches with pgvector cosine similarity and neighboring sections. With AI enabled, small selected rulebooks (up to 40 chunks and 32,000 content/heading characters) are supplied in full; larger books use bounded excerpts. AI translations and topic keywords help retrieval, but explanations cite the original rules only. Exact card/figure associations, PWA installation and conversational follow-ups remain planned. Distant exceptions can still be missed; source identifier checks do not prove that every explanation is correct.
+Retrieval combines multilingual keyword matches with pgvector cosine similarity. For larger books it expands neighboring fragments and the best contiguous sections, then uses up to two source page references to include related procedures and their continuation pages. The context remains limited to 32,000 content/heading characters and 160 original fragments. With AI enabled, small selected rulebooks (up to 40 chunks and 32,000 content/heading characters) are supplied in full. Answers display search and explanation timings. `gpt-6-luna`/`gpt-6-sol` explanations use low reasoning effort for up to 40 fragments and medium for larger contexts; source IDs are restricted to supplied sources in the response schema and checked again. AI translations and topic keywords help retrieval, but explanations cite the original rules only. Page hints currently use actual PDF positions, so different printed numbering can miss the intended page. Exact card/figure associations, PWA installation and conversational follow-ups remain planned. Distant exceptions can still be missed; source identifier checks do not prove that every explanation is correct.
 
 ### Components
 
@@ -88,7 +89,11 @@ The launcher creates `infra/.env` if needed, builds the images and runs a CUDA o
 
 Open [http://localhost:8080](http://localhost:8080) for players, or [http://localhost:8080/admin](http://localhost:8080/admin) for administrators. No admin login is required. Use **Questions** and **Admin** in the top menu to switch interfaces. Keep `infra/.env` private and out of version control.
 
-Existing rulebooks: choose **AI processing** on the document, then **Review**. Expand **AI translation** to read the translation in the selected interface language, and publish after checking it. The old published version remains in use until then. New uploads use the AI stage automatically when enabled. The full extracted rule text is sent to OpenAI for translation and embeddings; images remain stored locally. Processing failure keeps usable original material and shows an AI warning.
+Existing rulebooks: choose **AI processing** on the document, then **Review**. Expand **AI translation** to read the translation in the selected interface language, and publish after checking it. The old published version remains in use until then. New uploads use the AI stage automatically when enabled. At upload, choose the **Rulebook language** and **Use language** (English, Hungarian or both). Translation runs only for selected languages different from the source language: Hungarian → Hungarian skips translation entirely; English → Hungarian creates only a Hungarian translation. Original text is still processed and indexed. The selection is saved for extraction and AI-only reprocessing. Existing documents keep their previous bilingual selection. Excerpts are sent to OpenAI for embeddings and any required translations; images remain stored locally. Processing failure keeps usable original material and shows an AI warning.
+
+The processing log refreshes every two seconds. Select one of the five most recent jobs; **Follow log** scrolls to the newest events. The panel shows up to 250 events, including extraction, translation and indexing timings. During an API call it shows the current step's elapsed time. Events remain with the processed version's files until those files are deleted. Raw provider output and document text are not shown in this log.
+
+AI processing packs up to 32 sections and 10,000 source/heading characters per batch, preserving each original section and reference. Translation runs only for required target languages; `gpt-6-luna` translation calls use `reasoning.effort=none`. These reduce request overhead, but full processing time still depends on document extraction, rulebook size and API latency. See [processing validation](docs/processing-validation.md) for measured checks.
 
 ### 3. Configuration
 
@@ -121,7 +126,7 @@ Set `OPENAI_API_KEY` locally in `infra/.env`. The setup scripts preserve existin
 docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api worker
 ```
 
-Refresh the player page. Existing large books need **AI processing** and publication to enable cross-language semantic retrieval. Translation/indexing requests also use your OpenAI account and can incur charges. **AI indexed** means every excerpt has translations and an embedding; **Partial AI index** means only some derived data is available. Limits skip AI processing without discarding extracted rules.
+Refresh the player page. Existing large books need **AI processing** and publication to enable cross-language semantic retrieval. Translation/indexing requests also use your OpenAI account and can incur charges. **AI indexed** means every excerpt has the required translations and an embedding; **Partial AI index** means only some derived data is available. Limits skip AI processing without discarding extracted rules.
 
 The question and selected excerpts are sent to OpenAI for explanations; recordings are sent for transcription. Requests use `store=false` for generated responses. The app saves neither recordings nor question history in the database. Provider data handling still follows your OpenAI account settings. A valid key, model access and internet connection are required; provider failure falls back to literal rule search.
 
@@ -228,3 +233,4 @@ The API and PostgreSQL are internal services. Caddy serves the frontend and prox
 - [pgvector](https://github.com/pgvector/pgvector)
 - [Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/)
 - [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+

@@ -56,5 +56,6 @@
   "errors.ai_not_configured": "AI processing requires OPENAI_API_KEY and AI_PROCESSING_ENABLED.",
   "errors.ai_requires_extraction": "Extract the rulebook first, then start AI processing.",
   "errors.ai_processing_failed": "AI processing was incomplete. Original rules are available; retry AI processing to finish translations and indexing.",
-  "errors.ai_processing_limit": "This document exceeds the AI processing limit. Split it into smaller rulebooks or change the configured limit."
+  "errors.ai_processing_limit": "This document exceeds the AI processing limit. Split it into smaller rulebooks or change the configured limit.",
+  "stages.converting_document": "Converting document and processing pages"
 }

@@ -1,8 +1,10 @@
 import hashlib
 import logging
+import json
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -18,8 +20,10 @@ from .db import connect
 from .storage import storage_path
 from .i18n import api_error, error_response, localize_version, request_language
 from .play import router as play_router
+from .joblog import read_events
 
 logger = logging.getLogger(__name__)
+UsageLanguage = Literal["en", "hu", "both"]
 
 
 @asynccontextmanager
@@ -83,6 +87,7 @@ class TextInput(BaseModel):
     title: str = Field(default="szabaly.md", min_length=1, max_length=200)
     content: str = Field(min_length=1, max_length=2_000_000)
     language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
+    usage_language: UsageLanguage = "en"
 
     @field_validator("content")
     @classmethod
@@ -144,7 +149,7 @@ def ensure_game(db, game_id):
 
 
 DOCUMENT_QUERY = """
-SELECT d.id,d.game_id,d.filename,d.format,d.language,d.size_bytes,d.created_at,
+SELECT d.id,d.game_id,d.filename,d.format,d.language,d.usage_language,d.size_bytes,d.created_at,
  COALESCE(v.status,'uploaded') AS status,v.id AS version_id,v.stage,v.progress,v.error,
  COALESCE(v.ai_status,'none') AS ai_status,v.ai_error_code,
  v.page_count,v.character_count,v.processor,v.finished_at,
@@ -167,7 +172,59 @@ def documents(game_id: UUID, request: Request):
         return [localize_version(row, request_language(request)) for row in rows]
 
 
-def save_document(game_id, filename, extension, language, content):
+@app.get("/api/games/{game_id}/processing")
+def processing_log(game_id: UUID, request: Request):
+    now = datetime.now(timezone.utc)
+    with connect() as db:
+        ensure_game(db, game_id)
+        rows = db.execute(
+            "SELECT j.id,j.version_id,j.lease_token,j.state,j.kind,j.attempts,j.created_at,"
+            "d.filename,v.stage,v.progress,v.finished_at FROM jobs j JOIN versions v ON v.id=j.version_id "
+            "JOIN documents d ON d.id=v.document_id WHERE d.game_id=%s ORDER BY j.created_at DESC LIMIT 5",
+            (game_id,),
+        ).fetchall()
+    result = []
+    for row in rows:
+        output = storage_path(f"processed/{row['version_id']}/{row['lease_token']}")
+        events = read_events(output) if row["lease_token"] else []
+        state = {}
+        if row["state"] == "running":
+            try:
+                state = json.loads((output / "progress.json").read_text("utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+        try:
+            started = datetime.fromisoformat((output / "started_at.txt").read_text("utf-8"))
+        except (FileNotFoundError, ValueError):
+            started = row["created_at"]
+        end = row["finished_at"] or now
+        step_started = (
+            datetime.fromisoformat(state["updated_at"]) if state.get("updated_at") else end
+        )
+        data = localize_version(
+            {
+                **row,
+                "stage": state.get("stage", row["stage"]),
+                "progress": state.get("progress", row["progress"]),
+            },
+            request_language(request),
+        )
+        data.pop("lease_token", None)
+        data.update(
+            events=events,
+            elapsed_seconds=max(0, int((end - started).total_seconds())),
+            step_elapsed_seconds=max(0, int((end - step_started).total_seconds())),
+            details={
+                key: state[key]
+                for key in ("batch", "batches", "completed_chunks", "total_chunks")
+                if key in state
+            },
+        )
+        result.append(data)
+    return {"jobs": result}
+
+
+def save_document(game_id, filename, extension, language, content, usage_language="en"):
     if not content or not content.strip() and extension in {"txt", "md"}:
         raise api_error(400, "empty_document")
     digest = hashlib.sha256(content).hexdigest()
@@ -180,7 +237,7 @@ def save_document(game_id, filename, extension, language, content):
             ensure_game(db, game_id)
             path.write_bytes(content)
             row = db.execute(
-                "INSERT INTO documents(id,game_id,filename,format,language,size_bytes,sha256,source_path) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                "INSERT INTO documents(id,game_id,filename,format,language,size_bytes,sha256,source_path,usage_language) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (
                     document_id,
                     game_id,
@@ -190,6 +247,7 @@ def save_document(game_id, filename, extension, language, content):
                     len(content),
                     digest,
                     relative,
+                    usage_language,
                 ),
             ).fetchone()
         return row
@@ -206,6 +264,7 @@ def upload_document(
     game_id: UUID,
     file: Annotated[UploadFile, File()],
     language: Annotated[str, Form(pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")] = "en",
+    usage_language: Annotated[UsageLanguage, Form()] = "en",
 ):
     filename = (file.filename or "document").replace("\\", "/").rsplit("/", 1)[-1][:200]
     extension = Path(filename).suffix.lower().lstrip(".")
@@ -223,7 +282,7 @@ def upload_document(
             bytes(content).decode("utf-8-sig")
         except UnicodeDecodeError:
             raise api_error(400, "invalid_encoding")
-    return save_document(game_id, filename, extension, language, bytes(content))
+    return save_document(game_id, filename, extension, language, bytes(content), usage_language)
 
 
 @app.post("/api/games/{game_id}/documents/text", status_code=201)
@@ -234,7 +293,7 @@ def upload_text(game_id: UUID, body: TextInput):
     content = body.content.encode("utf-8")
     if len(content) > config.MAX_UPLOAD_BYTES:
         raise api_error(413, "text_too_long")
-    return save_document(game_id, filename, "md", body.language, content)
+    return save_document(game_id, filename, "md", body.language, content, body.usage_language)
 
 
 @app.post("/api/documents/{document_id}/process", status_code=202)

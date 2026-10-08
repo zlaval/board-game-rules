@@ -53,6 +53,7 @@ export type Document = {
   filename: string;
   format: string;
   language: string;
+  usage_language: "en" | "hu" | "both";
   size_bytes: number;
   status: string;
   version_id: string | null;

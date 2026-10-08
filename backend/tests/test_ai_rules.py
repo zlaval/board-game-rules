@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from uuid import UUID, uuid4
 
 import httpx2
+import pytest
 from openai import OpenAI
 
 from app import answers, config, embeddings, enrichment
@@ -61,8 +62,9 @@ def mock_sdk(monkeypatch, captured, invalid_ids=False):
             "sections": [
                 {
                     "id": "S999" if invalid_ids else row["id"],
-                    "english": row["text"],
-                    "hungarian": "Támadás után nem mozoghatsz. A futár kivétel.",
+                    "translation": "Támadás után nem mozoghatsz. A futár kivétel."
+                    if "into Hungarian only" in payload["instructions"]
+                    else row["text"],
                     "keywords": ["movement", "mozgás", "courier", "futár"],
                 }
                 for row in excerpts
@@ -118,8 +120,10 @@ def test_sdk_translation_and_embedding_preserve_original_and_provenance(monkeypa
     assert chunk["id"] == original["id"] and chunk["provenance"] == original["provenance"]
     assert chunk["page"] == 2 and chunk["source_ref"] == "#/texts/1"
     assert "nem mozoghatsz" in chunk["translation_hu"]
+    assert "translation_en" not in chunk
     assert len(chunk["embedding"]) == 1536
     assert captured[0][1]["store"] is False
+    assert captured[0][1]["reasoning"]["effort"] == "none"
     assert captured[0][1]["text"]["format"]["type"] == "json_schema"
     assert captured[1][1]["dimensions"] == 1536
     assert "cannot move" in captured[1][1]["input"][0]
@@ -130,10 +134,10 @@ def test_invalid_translation_ids_are_rejected_and_original_remains(monkeypatch, 
     mock_sdk(monkeypatch, captured, invalid_ids=True)
     data = manifest()
     enrichment.enrich(data, tmp_path)
-    assert data["ai_status"] == "failed" and data["ai_error_code"] == "ai_processing_failed"
+    assert data["ai_status"] == "partial" and data["ai_error_code"] == "ai_processing_failed"
     assert "translation_hu" not in data["chunks"][0]
     assert "cannot move" in data["chunks"][0]["content"]
-    assert len(captured) == 1
+    assert len(captured) == 2 and data["chunks"][0]["embedding"]
 
 
 def test_embedding_failure_retains_translations_and_records_partial_status(monkeypatch, tmp_path):
@@ -163,7 +167,14 @@ def test_embedding_response_order_is_matched_to_input(monkeypatch):
 
 def test_ai_reprocessing_reuses_extraction_and_preserves_published_version(client, monkeypatch):
     game = create_game(client)
-    doc = add_text(client, game, "After an attack you cannot move. The courier is an exception.")
+    doc = client.post(
+        f"/api/games/{game}/documents/text",
+        json={
+            "content": "After an attack you cannot move. The courier is an exception.",
+            "language": "en",
+            "usage_language": "hu",
+        },
+    ).json()["id"]
     old = process(client, doc)
     client.post(f"/api/versions/{old}/publish")
     old_asset = uuid4()
@@ -186,7 +197,9 @@ def test_ai_reprocessing_reuses_extraction_and_preserves_published_version(clien
     assert job["kind"] == "ai" and str(job["source_version_id"]) == old
     output = storage_path("test-ai-copy")
     output.mkdir(parents=True, exist_ok=True)
-    data = enrichment.enrich(enrichment.copy_extracted(old, output), output)
+    data = enrichment.copy_extracted(old, output)
+    assert data["source_language"] == "en" and data["usage_language"] == "hu"
+    enrichment.enrich(data, output, data["source_language"], data["usage_language"])
     assert data["chunks"][0]["page"] == 2
     assert (output / data["assets"][0]["filename"]).read_bytes() == b"original figure"
     assert data["assets"][0]["id"] != str(old_asset)
@@ -261,3 +274,87 @@ def test_ai_progress_stages_are_localized():
         localize_version({"stage": "ai_indexing"}, "hu")["stage"]
         == "Szemantikus keresési index építése"
     )
+
+
+@pytest.mark.parametrize(
+    "source,usage,targets",
+    [
+        ("hu", "hu", []),
+        ("en", "en", []),
+        ("en-US", "en", []),
+        ("en", "hu", ["hu"]),
+        ("hu", "en", ["en"]),
+        ("hu", "both", ["en"]),
+        ("en", "both", ["hu"]),
+        ("de", "both", ["en", "hu"]),
+    ],
+)
+def test_only_requested_non_source_languages_are_translated(
+    monkeypatch, tmp_path, source, usage, targets
+):
+    captured = []
+    mock_sdk(monkeypatch, captured)
+    data = enrichment.enrich(manifest(), tmp_path, source, usage)
+    assert data["ai_status"] == "complete"
+    translation_calls = [body for path, body in captured if path.endswith("/responses")]
+    embedding_calls = [body for path, body in captured if path.endswith("/embeddings")]
+    assert len(translation_calls) == len(targets)
+    assert len(embedding_calls) == 1
+    for body, language in zip(translation_calls, targets, strict=True):
+        target = {"en": "English", "hu": "Hungarian"}[language]
+        assert f"into {target} only" in body["instructions"]
+    for language in ("en", "hu"):
+        assert (f"translation_{language}" in data["chunks"][0]) == (language in targets)
+    assert (
+        data["chunks"][0]["embedding"]
+        and data["chunks"][0]["content"] == manifest()["chunks"][0]["content"]
+    )
+    assert data["ai_model"] == (config.OPENAI_PROCESSING_MODEL if targets else None)
+
+
+def test_upload_usage_language_is_validated_and_persisted(client):
+    game = create_game(client)
+    text = client.post(
+        f"/api/games/{game}/documents/text",
+        json={
+            "content": "Támadás után nem mozoghatsz.",
+            "language": "hu",
+            "usage_language": "hu",
+        },
+    )
+    assert text.status_code == 201
+    file = client.post(
+        f"/api/games/{game}/documents",
+        files={
+            "file": ("rules.txt", b"After an attack you cannot move.", "text/plain"),
+        },
+        data={"language": "en", "usage_language": "both"},
+    )
+    assert file.status_code == 201
+    docs = {doc["id"]: doc for doc in client.get(f"/api/games/{game}/documents").json()}
+    assert docs[text.json()["id"]]["usage_language"] == "hu"
+    assert docs[file.json()["id"]]["usage_language"] == "both"
+    assert (
+        client.post(
+            f"/api/games/{game}/documents/text",
+            json={
+                "content": "Invalid language selection",
+                "usage_language": "fr",
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"/api/games/{game}/documents",
+            files={
+                "file": ("invalid.txt", b"Invalid selection", "text/plain"),
+            },
+            data={"usage_language": "fr"},
+        ).status_code
+        == 422
+    )
+    job_id = client.post(f"/api/documents/{text.json()['id']}/process").json()["version_id"]
+    job = claim()
+    assert str(job["version_id"]) == job_id
+    assert job["document"]["language"] == "hu" and job["document"]["usage_language"] == "hu"

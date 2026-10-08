@@ -56,5 +56,6 @@
   "errors.ai_not_configured": "Az AI-feldolgozáshoz OPENAI_API_KEY és AI_PROCESSING_ENABLED szükséges.",
   "errors.ai_requires_extraction": "Először nyerd ki a szabálykönyv szövegét, majd indíts AI-feldolgozást.",
   "errors.ai_processing_failed": "Az AI-feldolgozás nem teljes. Az eredeti szabályok elérhetők; a fordítás és indexelés befejezéséhez indíts újra AI-feldolgozást.",
-  "errors.ai_processing_limit": "A dokumentum meghaladja az AI-feldolgozás korlátját. Bontsd kisebb szabálykönyvekre, vagy módosítsd a beállított korlátot."
+  "errors.ai_processing_limit": "A dokumentum meghaladja az AI-feldolgozás korlátját. Bontsd kisebb szabálykönyvekre, vagy módosítsd a beállított korlátot.",
+  "stages.converting_document": "Dokumentum és oldalak feldolgozása"
 }

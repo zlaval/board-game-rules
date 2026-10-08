@@ -4,18 +4,24 @@ import json
 import os
 import re
 import sys
+from time import monotonic
 from pathlib import Path
 from uuid import uuid4
 
 from .config import MAX_DOCUMENT_PAGES, MAX_UPLOAD_BYTES
 from .acceleration import convert_with_fallback
 from .ocr_models import prepare_ocr_models
+from .joblog import event, timestamp
 
 
-def progress(output: Path, stage: str, percent: int):
+def progress(output: Path, stage: str, percent: int, **details):
     temporary = output / "progress.tmp"
-    temporary.write_text(json.dumps({"stage": stage, "progress": percent}), encoding="utf-8")
+    temporary.write_text(
+        json.dumps({"stage": stage, "progress": percent, "updated_at": timestamp(), **details}),
+        encoding="utf-8",
+    )
     temporary.replace(output / "progress.json")
+    event(output, "stage", stage=stage, progress=percent)
 
 
 def split_text(text: str, limit: int = 1800) -> list[str]:
@@ -64,7 +70,7 @@ def extract_text(path: Path):
     return sections, [], 0, "text-v1"
 
 
-def extract_docling(path: Path, output: Path):
+def extract_docling(path: Path, output: Path, source_language="en"):
     from docling.datamodel.accelerator_options import AcceleratorOptions
     from docling.datamodel.base_models import ConversionStatus, InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions, RapidOcrOptions
@@ -82,6 +88,7 @@ def extract_docling(path: Path, output: Path):
         )
         options.ocr_options = RapidOcrOptions(
             backend=backend,
+            lang=[f"iso:{source_language}"],
             **prepare_ocr_models(cache, backend),
             rapidocr_params={"Global.model_root_dir": cache},
         )
@@ -94,6 +101,7 @@ def extract_docling(path: Path, output: Path):
                 InputFormat.IMAGE: ImageFormatOption(pipeline_options=options),
             }
         )
+        progress(output, f"converting_document ({device})", 35)
         result = converter.convert(
             path, max_num_pages=MAX_DOCUMENT_PAGES, max_file_size=MAX_UPLOAD_BYTES
         )
@@ -147,13 +155,15 @@ def extract_docling(path: Path, output: Path):
     return sections, assets, len(doc.pages), "docling-v2"
 
 
-def process(path: Path, output: Path):
+def process(path: Path, output: Path, source_language="en", usage_language="both"):
     output.mkdir(parents=True, exist_ok=True)
     progress(output, "extracting_text", 15)
+    started = monotonic()
+    event(output, "settings", source_language=source_language, usage_language=usage_language)
     if path.suffix.lower() in {".txt", ".md"}:
         sections, assets, pages, processor = extract_text(path)
     else:
-        sections, assets, pages, processor = extract_docling(path, output)
+        sections, assets, pages, processor = extract_docling(path, output, source_language)
     chunks = []
     for section in sections:
         for content in split_text(section["text"]):
@@ -173,12 +183,21 @@ def process(path: Path, output: Path):
         "character_count": sum(len(c["content"]) for c in chunks),
         "processor": processor,
     }
+    event(
+        output,
+        "extracted",
+        count=len(chunks),
+        characters=manifest["character_count"],
+        pages=pages,
+        figures=len(assets),
+        seconds=round(monotonic() - started, 2),
+    )
     from .enrichment import enrich
 
-    enrich(manifest, output)
+    enrich(manifest, output, source_language, usage_language)
     progress(output, "preparing_search", 97)
     (output / "result.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    process(Path(sys.argv[1]), Path(sys.argv[2]))
+    process(Path(sys.argv[1]), Path(sys.argv[2]), *sys.argv[3:5])

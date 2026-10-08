@@ -580,6 +580,14 @@ export default function Player() {
                             )}
                           </p>
                         )}
+                        {answer.timings && (
+                          <p className="player-input-help">
+                            {t("Search: {search}s · Explanation: {explanation}s", {
+                              search: (answer.timings.search_ms / 1000).toFixed(1),
+                              explanation: (answer.timings.explanation_ms / 1000).toFixed(1),
+                            })}
+                          </p>
+                        )}
                         {answer.sources.length > 0 && (
                           <div className="player-sources">
                             <h4>{t("Original rule sections")}</h4>

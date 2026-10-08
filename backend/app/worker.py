@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from .db import connect
 from .storage import storage_path
+from .joblog import event, timestamp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("worker")
@@ -143,6 +144,8 @@ def run_job(job):
     relative = f"processed/{job['version_id']}/{job['token']}"
     output = storage_path(relative)
     output.mkdir(parents=True, exist_ok=True)
+    (output / "started_at.txt").write_text(timestamp(), encoding="utf-8")
+    event(output, "job_started", attempt=job["attempts"] + 1, kind=job.get("kind", "extract"))
     log.info("Processing job %s", job["id"])
     with (output / "processing.log").open("w", encoding="utf-8") as logfile:
         child = subprocess.Popen(
@@ -154,6 +157,11 @@ def run_job(job):
                 if job.get("kind") == "ai"
                 else str(storage_path(job["document"]["source_path"])),
                 str(output),
+                *(
+                    [job["document"]["language"], job["document"]["usage_language"]]
+                    if job.get("kind") != "ai"
+                    else []
+                ),
             ],
             stdout=logfile,
             stderr=subprocess.STDOUT,
@@ -163,9 +171,11 @@ def run_job(job):
         try:
             while child.poll() is None:
                 if stop.is_set():
+                    event(output, "job_interrupted")
                     # Leave the durable lease to expire so a restarted worker can recover it.
                     return
                 if time.monotonic() - started > 1800:
+                    event(output, "job_timeout")
                     fail(
                         job,
                         "processing_timeout",
@@ -182,6 +192,7 @@ def run_job(job):
                     next_heartbeat = time.monotonic() + 10
                 stop.wait(0.5)
             if child.returncode:
+                event(output, "job_failed", exit_code=child.returncode)
                 detail = (output / "processing.log").read_text(encoding="utf-8", errors="replace")
                 log.error("Job %s failed: %s", job["id"], detail[-2000:])
                 fail(
@@ -190,7 +201,9 @@ def run_job(job):
                 )
                 return
             manifest = json.loads((output / "result.json").read_text(encoding="utf-8"))
-            complete(job, manifest, relative)
+            event(output, "saving_results")
+            if complete(job, manifest, relative):
+                event(output, "job_done", seconds=round(time.monotonic() - started, 2))
             log.info("Job %s completed", job["id"])
         finally:
             if child.poll() is None:

@@ -1,4 +1,6 @@
 -r requirements.txt
 docling==2.135.0
+# Docling 2.135.0 uses PP_OCRV6_LANGS, removed by RapidOCR 3.10.0.
+rapidocr==3.9.2
 onnxruntime==1.30.0
 

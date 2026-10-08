@@ -6,6 +6,8 @@ COPY backend/requirements*.txt ./
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 RUN pip install --no-cache-dir torch==2.14.1 torchvision==0.29.1 --index-url ${TORCH_INDEX_URL}
 RUN pip install --no-cache-dir -r requirements-worker.txt
+# Fail the image build if the OCR dependency's required language registry changes.
+RUN python -c "from rapidocr.utils.model_resolver import PP_OCRV6_LANGS; assert 'hu' in PP_OCRV6_LANGS"
 COPY backend/app ./app
 COPY backend/scripts ./scripts
 RUN useradd --uid 10001 --create-home rules && mkdir /data /models && chown rules:rules /data /models

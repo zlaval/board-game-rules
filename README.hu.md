@@ -15,7 +15,8 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 - Játékok felvétele és szerkesztése: kiadás, leírás és a szabálykönyv nyelve.
 - PDF, TXT, Markdown, PNG, JPG és WebP feltöltése vagy szöveg közvetlen beillesztése.
 - PDF-ek és képek feldolgozása Doclinggal és OCR-rel, külön háttérfolyamatban.
-- Beállított OpenAI mellett a kinyert szabályok angol és magyar fordítása, többnyelvű szemantikus index PostgreSQL/pgvector alapon. Az eredeti szöveg és forráshely megmarad.
+- Terminálszerű feldolgozási napló időbélyegekkel, aktuális lépéssel, eltelt idővel, csomagszámokkal, API-várakozással, modellnevekkel és hibákkal.
+- Beállított OpenAI mellett a kinyert szabályok fordítása a választott használati nyelvekre (angol, magyar vagy mindkettő), többnyelvű szemantikus index PostgreSQL/pgvector alapon. Az eredeti szöveg és forráshely megmarad.
 - **AI-feldolgozás** a már kinyert szabálykönyvön újabb OCR nélkül; ellenőrizhető fordítások az új változat közzététele előtt.
 - Elérhető NVIDIA GPU előnyben részesítése; GPU hiányában CPU, GPU-s konverziós hiba után egyszeri CPU-s újrapróbálkozás.
 - Kinyert szabályrészek ellenőrzése forrásoldalakkal, kulcsszavas kereséssel és eredeti ábrákkal.
@@ -38,7 +39,7 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 
 1. Nyisd meg az [adminfelületet](http://localhost:8080/admin), és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
 2. Nyisd meg a játékot, majd válaszd a **Szabályanyag feltöltése** gombot. Válassz fájlokat vagy a **Szöveg beillesztése** lehetőséget. A Markdown-címek segítik a tagolást.
-3. Hagyd bekapcsolva a **Feldolgozás indítása a feltöltés után** lehetőséget, vagy indítsd el később kézzel. A dokumentum mellett megjelenik a folyamat és az esetleges hiba.
+3. Válaszd ki a **Szabálykönyv nyelve** és **Használat nyelve** mezőket. Egyező nyelveknél kimarad a fordítás. Hagyd bekapcsolva a **Feldolgozás indítása a feltöltés után** lehetőséget, vagy indítsd el később kézzel. A játékoldal alján a **Feldolgozási napló** mutatja a részleteket.
 4. A feldolgozás végén nyisd meg az **Ellenőrzés** nézetet. Keress a szövegben, ellenőrizd a forrásoldalakat és ábrákat; szükség esetén töltsd le az eredetit.
 5. Az **Ellenőriztem, közzéteszem** gombbal hagyd jóvá a változatot. Az **Újrafeldolgozás** új változatot készít, a korábbi közzétett továbbra is elérhető.
 
@@ -46,7 +47,7 @@ A nyelvválasztó a közös fejlécben és a párbeszédablakokban is elérhető
 
 Jelenlegi korlátok: alapértelmezetten 50 MB fájlonként, 100 oldal dokumentumonként, 30 perces feldolgozási időkorlát. Több feltöltött kép külön dokumentumként kerül be. A forráshely a PDF tényleges oldalsorszáma, nem a nyomtatott oldalcímke. Az OCR eredményét embernek is ellenőriznie kell.
 
-A keresés többnyelvű kulcsszavas találatokat és pgvector-alapú szemantikus hasonlóságot egyesít a szomszédos szabályrészekkel. Bekapcsolt AI mellett a kisebb kiválasztott szabálykönyvek teljes szövegét adjuk át, legfeljebb 40 darabig és 32 000 szöveg-/címkarakterig; nagyobb anyagnál korlátozott részleteket. A fordítások és témakulcsszavak a keresést segítik, de a magyarázatok mindig az eredeti szabályra hivatkoznak. A pontos kártya-/ábrakapcsolatok, PWA és beszélgetési kontextus későbbi feladatok. Távoli kivételek kimaradhatnak; a forrásazonosítók ellenőrzése nem bizonyítja minden magyarázat helyességét.
+A keresés többnyelvű kulcsszavas találatokat és pgvector-alapú szemantikus hasonlóságot egyesít. Nagyobb könyvnél hozzáveszi a szomszédos töredékeket és a legjobb összefüggő fejezeteket, majd legfeljebb két szöveges oldalhivatkozás alapján a kapcsolódó eljárásokat és folytató oldalaikat. A kontextus továbbra is legfeljebb 32 000 szöveg-/címkarakter és 160 eredeti töredék. Bekapcsolt AI mellett a kisebb kiválasztott szabálykönyvek teljes szövegét adjuk át, legfeljebb 40 rész és 32 000 karakter esetén. A válasz mellett látható a keresés és magyarázat ideje. A `gpt-6-luna`/`gpt-6-sol` magyarázatok legfeljebb 40 töredéknél alacsony, nagyobb kontextusnál közepes következtetési beállítást használnak; a válaszséma csak átadott forrásazonosítókat enged, ezeket külön is ellenőrizzük. A fordítások és témakulcsszavak a keresést segítik, de a magyarázatok mindig az eredeti szabályra hivatkoznak. Az oldalhivatkozások keresése jelenleg a PDF tényleges oldalsorszámait használja, így eltérő nyomtatott számozásnál elvétheti a céloldalt. A pontos kártya-/ábrakapcsolatok, PWA és beszélgetési kontextus későbbi feladatok. Távoli kivételek kimaradhatnak; a forrásazonosítók ellenőrzése nem bizonyítja minden magyarázat helyességét.
 
 ### Összetevők
 
@@ -88,7 +89,11 @@ Az indító szükség esetén létrehozza az `infra/.env` fájlt, felépíti az 
 
 A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. Az admin nem kér belépést. A felső **Kérdezés** és **Admin** menüponttal válthatsz a felületek között. Az `infra/.env` fájlt kezeld titokként, és ne tedd verziókezelésbe.
 
-Meglévő szabálykönyvnél válaszd a dokumentum **AI-feldolgozás**, majd **Ellenőrzés** gombját. Az **AI-fordítás** részben a felület nyelvén olvashatod a fordítást; ellenőrzés után tedd közzé. Addig a korábbi közzétett változat marad használatban. Új feltöltésnél az AI-szakasz automatikusan fut, ha engedélyezett. A teljes kinyert szöveg az OpenAI-hoz kerül fordításra és indexelésre; a képek helyben maradnak. AI-hiba esetén az eredeti szöveg megmarad, a felület figyelmeztet.
+Meglévő szabálykönyvnél válaszd a dokumentum **AI-feldolgozás**, majd **Ellenőrzés** gombját. Az **AI-fordítás** részben a felület nyelvén olvashatod a fordítást; ellenőrzés után tedd közzé. Addig a korábbi közzétett változat marad használatban. Új feltöltésnél az AI-szakasz automatikusan fut, ha engedélyezett. Feltöltéskor válaszd ki a **Szabálykönyv nyelve** és **Használat nyelve** mezőket (angol, magyar vagy mindkettő). Fordítás csak a forrásétól eltérő, kiválasztott nyelvekre készül: magyar → magyar esetén teljesen kimarad; angol → magyar esetén csak magyar fordítás készül. Az eredeti szöveg feldolgozása és indexelése továbbra is lefut. A választást a dokumentumhoz mentjük, és újrafeldolgozáskor is használjuk. A korábbi dokumentumok megtartják az eddigi két nyelvű beállítást. A szövegrészletek indexelésre és a szükséges fordításra az OpenAI-hoz kerülnek; a képek helyben maradnak. AI-hiba esetén az eredeti szöveg megmarad, a felület figyelmeztet.
+
+A feldolgozási napló két másodpercenként frissül. Az öt legutóbbi feladat közül választhatsz; a **Napló követése** a legújabb eseményekhez görget. Legfeljebb 250 esemény látszik, köztük a kinyerés, fordítás és indexelés időmérései. API-hívás közben az aktuális lépés eltelt ideje is megjelenik. Az események a feldolgozott változat fájljaival együtt maradnak meg azok törléséig. Nyers API-kimenet és dokumentumszöveg nem kerül ebbe a naplóba.
+
+Az AI-feldolgozás legfeljebb 32 szabályrészt és 10 000 forrás-/címkaraktert rendez egy csomagba, az eredeti részek és hivatkozások megőrzésével. Fordítás csak a szükséges célnyelvekre készül; a `gpt-6-luna` fordítási hívások `reasoning.effort=none` beállítást használnak. Ez csökkenti a hívások többletidejét, de a teljes feldolgozási idő függ a dokumentum kinyerésétől, méretétől és az API válaszidejétől. A mérések az angol [ellenőrzési jegyzetben](docs/processing-validation.md) találhatók.
 
 ### 3. Beállítások
 
@@ -121,7 +126,7 @@ Az `infra/.env` fájlban helyben állítsd be az `OPENAI_API_KEY` értékét. A 
 docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api worker
 ```
 
-GPU-s worker esetén a fenti parancsban add meg az `-f infra/compose.gpu.yaml` kiegészítőt is. A beállítás az API és a worker újraindítása után érvényes. Meglévő nagy könyvnél az **AI-feldolgozás** és közzététel teszi elérhetővé a többnyelvű szemantikus keresést. A fordítás és indexelés fizetős OpenAI-hívásokat használhat. Az **AI-indexelt** állapot minden részhez fordítást és embeddinget jelez; a **Részleges AI-index** csak részben elkészült adatokat. A korlát túllépése nem törli a kinyert szabályokat.
+GPU-s worker esetén a fenti parancsban add meg az `-f infra/compose.gpu.yaml` kiegészítőt is. A beállítás az API és a worker újraindítása után érvényes. Meglévő nagy könyvnél az **AI-feldolgozás** és közzététel teszi elérhetővé a többnyelvű szemantikus keresést. A fordítás és indexelés fizetős OpenAI-hívásokat használhat. Az **AI-indexelt** állapot minden részhez a szükséges fordításokat és embeddinget jelez; a **Részleges AI-index** csak részben elkészült adatokat. A korlát túllépése nem törli a kinyert szabályokat.
 
 Frissítsd a kérdezőfelületet. A magyarázathoz a kérdés és a kiválasztott szabályrészletek, a beszédfelismeréshez a hangfelvétel kerül az OpenAI-hoz. A generált válaszokhoz `store=false` beállítást küldünk. Az alkalmazás sem a hangot, sem a kérdéselőzményeket nem menti adatbázisba; a szolgáltatói adatkezelésre az OpenAI-fiókod beállításai érvényesek. Érvényes kulcs, modellhozzáférés és internet szükséges. Szolgáltatói hibánál az eredeti szabályszöveg keresése marad használható.
 
@@ -228,3 +233,4 @@ Az API és a PostgreSQL belső szolgáltatások. A Caddy szolgálja ki a fronten
 - [pgvector](https://github.com/pgvector/pgvector)
 - [Docker Compose GPU-támogatás](https://docs.docker.com/compose/how-tos/gpu-support/)
 - [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+

@@ -5,10 +5,10 @@ Date: 2026-10-08.
 ## Implementation
 
 - API and worker receive the OpenAI key server-side. The frontend receives only capability flags.
-- New document extraction optionally produces faithful English/Hungarian translations, bilingual topic keywords and 1536-dimensional embeddings. Original text, source references, pages and figures remain unchanged.
+- Uploads store both the rulebook language and usage language (English, Hungarian or both). Extraction produces only the required translations, related topic keywords and 1536-dimensional embeddings. When source and usage language match, no translation request is made; the original rules are still indexed. Existing documents retain their previous bilingual selection. Original text, source references, pages and figures remain unchanged.
 - **AI processing** in the administrator creates a new version from existing extracted text and figures, without running OCR. The currently published version remains available until the new version is reviewed and published.
 - Preview displays translations separately from original excerpts. AI status distinguishes complete, partial, failed, skipped-by-limit and unprocessed versions.
-- Small selected books use complete original context. Larger selected books combine keyword and semantic retrieval, reciprocal rank fusion and neighboring excerpts within bounded context.
+- Small selected books use complete original context. Larger selected books combine keyword and semantic retrieval, reciprocal rank fusion, contiguous section expansion and bounded page-reference hints. See [retrieval validation](retrieval-validation.md).
 - Generated explanations use original excerpts, reference validated source IDs and preserve original page-bound figures. Derived translations and keywords support discovery; they are not supplied as factual source evidence to the answer model.
 - Unavailable semantic retrieval falls back to keyword retrieval. Incomplete enrichment retains original extracted rules. Three consecutive failed processing batches stop further requests; configured document limits skip AI processing.
 
@@ -25,8 +25,11 @@ Date: 2026-10-08.
 - The synthetic game, versions, jobs and files were removed by their recorded UUID. Existing household games were not reprocessed or republished.
 - API/PostgreSQL are healthy; frontend and worker are running. The worker retains its NVIDIA GPU device reservation. No OCR or PDF processing was run for these checks.
 - Answer and processing defaults were changed to `gpt-6-luna`, including the local deployment, Compose, setup templates and both READMEs. Two live in-memory probes passed with this model: EN/HU translation and a Hungarian source-cited explanation. The worker's runtime configuration was verified after recreation with its GPU reservation preserved.
+- Focused usage-language checks cover matching source/target languages without translation calls, single-target translation, both targets, regional English source labels, JSON/multipart upload validation, saved preferences and AI-only reprocessing. Translation failure still allows original-text embedding, with a partial status.
 
 ## Limits
+
+For the subsequent usage-language, batching and live processing-log changes, see [processing validation](processing-validation.md).
 
 These checks validate the integration and a small factual example, not explanation quality across complete real game libraries. Generated translations need review. Citation validation establishes source membership, not semantic correctness of every claim. Bounded retrieval may miss distant exceptions; original sources remain available for inspection.
 

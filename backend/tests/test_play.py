@@ -192,10 +192,18 @@ def test_real_sdk_structured_answer_checks_sources_and_provider_request(client, 
     assert result["sources"][0]["heading"] == "Courier"
     assert result["paragraphs"][0]["source_ids"] == [result["sources"][0]["id"]]
     assert captured[0]["store"] is False
+    assert captured[0]["reasoning"] == {"effort": "low"}
+    assert result["timings"]["total_ms"] >= result["timings"]["search_ms"] >= 0
+    assert result["timings"]["explanation_ms"] >= 0
     assert captured[0]["text"]["format"]["type"] == "json_schema"
     assert "Hungarian" in captured[0]["instructions"]
     context = json.loads(captured[0]["input"])
     assert context["complete_context"] is True and len(context["sources"]) == 2
+    schema = captured[0]["text"]["format"]["schema"]
+    assert schema["$defs"]["CitedParagraph"]["properties"]["source_ids"]["items"]["enum"] == [
+        "S1",
+        "S2",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -389,3 +397,100 @@ def test_large_rulebooks_retrieve_neighboring_exception_with_bounded_context(cli
     assert context["complete_context"] is False
     assert any("courier" in row["text"] for row in context["sources"])
     assert sum(len(row["text"]) for row in context["sources"]) <= config.AI_CONTEXT_CHARACTERS
+
+
+def test_fragmented_procedure_and_referenced_combat_pages_are_retrieved(client, monkeypatch):
+    game, doc, version = published(client, text="# Falvak\n\nA falvak lakói védekeznek.")
+    _, _, other_version = published(client, "Other edition", "# Falvak\n\nMás szabály.")
+    fragments = [
+        (1, "Falvak", 20, "Sereggel a mezőre lépve megáll a mozgás."),
+        (2, "Falvak", 20, "A bal oldali játékos három első szintű egységgel védekezik."),
+        (3, "Falvak", 20, "Győzelem esetén megkapod a jelzőt. A harc a 23. oldalon található."),
+        (4, "Falvak", 20, "Vereség esetén elpusztul a bábu."),
+        (50, "Előkészületek", 23, "Mindkét fél egységkártyákat húz."),
+        (51, "Harc", 24, "Felváltva játsszátok ki az egységeket."),
+        (52, "Győzelem", 25, "Döntetlennél a védekező győz."),
+    ]
+    with connect() as db:
+        db.execute("UPDATE chunks SET page=20 WHERE version_id=%s", (version,))
+        for ordinal, heading, page, content in fragments:
+            db.execute(
+                "INSERT INTO chunks(id,version_id,ordinal,heading,page,content,source_ref) "
+                "VALUES (%s,%s,%s,%s,%s,%s,'fragment')",
+                (uuid4(), version, ordinal, heading, page, content),
+            )
+        # Force the bounded retrieval path; do not exercise the small-book shortcut.
+        db.execute(
+            "INSERT INTO chunks(id,version_id,ordinal,content,source_ref) "
+            "VALUES (%s,%s,1000,%s,'large')",
+            (uuid4(), version, "unrelated " * 4000),
+        )
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test")
+    with connect() as db:
+        _, docs = answers.published_documents(db, game, [doc])
+        chunks, complete = answers.retrieve(db, docs, "hogy lehet harcolni falvak ellen?", True)
+    assert not complete
+    assert "ellen" not in answers.search_terms("falvak ellen")
+    assert {0, 1, 2, 3, 4, 50, 51, 52}.issubset({row["ordinal"] for row in chunks})
+    assert all(str(row["version_id"]) == version for row in chunks)
+    assert (
+        sum(len(row["content"]) + len(row["heading"]) for row in chunks)
+        <= config.AI_CONTEXT_CHARACTERS
+    )
+    assert all(str(row["version_id"]) != other_version for row in chunks)
+
+
+def test_page_reference_hints_are_bounded():
+    assert answers.referenced_pages("A harcról a 23. oldalon olvashatsz.") == [23]
+    assert answers.referenced_pages("Lásd a 23–24. oldalon.") == [23, 24]
+    assert answers.referenced_pages("See pages 23-999.") == [23, 24]
+    assert answers.referenced_pages("3 kártya, 20 pont.") == []
+
+
+def test_checked_citations_are_buttons_not_internal_labels_in_answer_text(client, monkeypatch):
+    game, _, _ = published(client)
+    install_sdk_response(
+        monkeypatch,
+        {
+            "status": "answered",
+            "paragraphs": [{"text": "The courier can move. [S2]", "source_ids": ["S2"]}],
+            "asset_ids": [],
+        },
+        [],
+    )
+    result = ask(client, game).json()
+    assert result["paragraphs"][0]["text"] == "The courier can move."
+    assert result["paragraphs"][0]["source_ids"]
+
+
+def test_large_fragment_context_keeps_reasoning_for_special_setup(monkeypatch):
+    captured = []
+    install_sdk_response(
+        monkeypatch,
+        {
+            "status": "answered",
+            "paragraphs": [{"text": "Specific setup applies.", "source_ids": ["S1"]}],
+            "asset_ids": [],
+        },
+        captured,
+    )
+    chunks = [
+        {
+            "id": uuid4(),
+            "document_id": uuid4(),
+            "version_id": uuid4(),
+            "filename": "rules.pdf",
+            "language": "hu",
+            "ordinal": index,
+            "heading": "Rules",
+            "content": "Original rule.",
+            "page": 20,
+            "source_ref": str(index),
+        }
+        for index in range(41)
+    ]
+    result = answers.generate_answer(
+        {"title": "Game", "edition": ""}, "Specific setup?", chunks, [], "hu", False
+    )
+    assert result["status"] == "answered"
+    assert captured[0]["reasoning"] == {"effort": "medium"}
