@@ -85,7 +85,7 @@ def install_sdk_response(monkeypatch, result, captured):
     monkeypatch.setattr(answers, "provider_client", client)
 
 
-def test_reader_is_public_but_drafts_and_admin_stay_private(client):
+def test_reader_only_lists_published_rules_while_admin_can_access_drafts(client):
     game, doc, version = published(client)
     draft_game = create_game(client, "Unpublished")
     draft_doc = add_text(client, draft_game)
@@ -94,11 +94,10 @@ def test_reader_is_public_but_drafts_and_admin_stay_private(client):
         draft_chunk = db.execute(
             "SELECT id FROM chunks WHERE version_id=%s LIMIT 1", (draft_version,)
         ).fetchone()["id"]
-    client.post("/api/auth/logout")
     listing = client.get("/api/play/games").json()
     assert [row["id"] for row in listing] == [game]
-    assert client.get("/api/games").status_code == 401
-    assert client.get(f"/api/documents/{doc}/source").status_code == 401
+    assert client.get("/api/games").status_code == 200
+    assert client.get(f"/api/documents/{doc}/source").status_code == 200
     assert client.get(f"/api/play/games/{draft_game}/documents").json() == []
     assert client.get(f"/api/play/games/{draft_game}/sources/{draft_chunk}").status_code == 404
     assert (

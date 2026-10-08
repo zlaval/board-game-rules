@@ -6,12 +6,10 @@ import time
 import urllib.error
 import urllib.request
 import zlib
-from http.cookiejar import CookieJar
 from uuid import uuid4
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app import config
 from app.db import connect
 from app.storage import storage_path
 
@@ -46,7 +44,7 @@ def create_pdf(card: Image.Image) -> bytes:
 
 def main():
     base = "http://api:8000/api"
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+    opener = urllib.request.build_opener()
 
     def request(path, body=None):
         payload = json.dumps(body).encode() if body is not None else None
@@ -58,7 +56,6 @@ def main():
         ) as response:
             return json.load(response)
 
-    request("/auth/login", {"username": config.ADMIN_USERNAME, "password": config.ADMIN_PASSWORD})
     game = request(
         "/games", {"title": f"__e2e__ PDF OCR smoke {uuid4().hex[:8]}", "language": "en"}
     )

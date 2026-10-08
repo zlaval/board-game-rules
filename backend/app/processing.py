@@ -166,7 +166,6 @@ def process(path: Path, output: Path):
         )
     if len(chunks) > 20000:
         raise ValueError("Too many rule sections. Split the material into smaller documents.")
-    progress(output, "preparing_search", 90)
     manifest = {
         "chunks": chunks,
         "assets": assets,
@@ -174,6 +173,10 @@ def process(path: Path, output: Path):
         "character_count": sum(len(c["content"]) for c in chunks),
         "processor": processor,
     }
+    from .enrichment import enrich
+
+    enrich(manifest, output)
+    progress(output, "preparing_search", 97)
     (output / "result.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
 

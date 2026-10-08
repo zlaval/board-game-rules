@@ -7,7 +7,7 @@ import {
 } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { api, ApiError } from "./api";
+import { api } from "./api";
 import type { Document, Game, Preview } from "./api";
 
 type IconName =
@@ -153,13 +153,11 @@ export function Modal({
   children,
   onClose,
   wide = false,
-  eyebrow = "RULESHELF / ADMIN",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
-  eyebrow?: string;
 }) {
   const { t } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -178,7 +176,6 @@ export function Modal({
     >
       <header className="modal-header">
         <div>
-          <span className="eyebrow">{t(eyebrow)}</span>
           <h2>{title}</h2>
         </div>
         <div className="modal-header-actions">
@@ -231,10 +228,7 @@ function GameForm({
     }
   }
   return (
-    <Modal
-      title={initial ? t("Edit game") : t("A new game on your shelf")}
-      onClose={onClose}
-    >
+    <Modal title={initial ? t("Edit game") : t("New game")} onClose={onClose}>
       <p className="modal-intro">
         {t(
           "Enter the game details first. You can upload the rulebook in the next step.",
@@ -242,8 +236,9 @@ function GameForm({
       </p>
       <form onSubmit={save} noValidate>
         <label>
-          {t("Game name")}
-          <span>*</span>
+          <span className="field-label">
+            {t("Game name")} <span aria-hidden="true">*</span>
+          </span>
           <input
             name="title"
             defaultValue={initial?.title}
@@ -388,8 +383,7 @@ function UploadForm({
   return (
     <Modal title={t("Upload rule material")} onClose={onClose}>
       <p className="modal-intro">
-        {t("Selected game:")}
-        <strong>{game.title}</strong>
+        {t("Selected game:")} <strong>{game.title}</strong>
       </p>
       <div className="tabs">
         <button
@@ -443,14 +437,15 @@ function UploadForm({
               </span>
               <strong>{t("Drop your rulebook here")}</strong>
               <span>{t("or click to choose files")}</span>
+
               <small>
                 {t("PDF, TXT, Markdown, PNG, JPG, WebP · up to 50 MB per file")}
               </small>
             </button>
             {files.length > 0 && (
               <ul className="selected-files">
-                {files.map((file, i) => (
-                  <li key={`${file.name}-${i}`}>
+                {files.map((file, index) => (
+                  <li key={file.name + index}>
                     <Icon name="file" />
                     <span>{file.name}</span>
                     <small>{fileSize(file.size)}</small>
@@ -483,7 +478,7 @@ function UploadForm({
                 placeholder={t("# Setup\n\nPaste the game rules here…")}
                 rows={9}
                 required
-                maxLength={2_000_000}
+                maxLength={2000000}
               />
             </label>
             <p className="field-note">
@@ -554,7 +549,7 @@ function PreviewModal({
   onClose: () => void;
   onPublished: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [data, setData] = useState<Preview | null>(null);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
@@ -597,11 +592,14 @@ function PreviewModal({
         <Icon name="file" />
         <span>{document.filename}</span>
         <Badge status={document.status} />
+        <span className="badge">
+          {t(`ai.${data?.version.ai_status ?? document.ai_status}`)}
+        </span>
       </div>
       <form
         className="preview-search"
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
           setOffset(0);
           setSearch(query);
         }}
@@ -609,7 +607,7 @@ function PreviewModal({
         <Icon name="search" />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder={t("Search extracted text…")}
           aria-label={t("Search the processed document")}
         />
@@ -618,6 +616,11 @@ function PreviewModal({
       {!!error && (
         <p className="error" role="alert">
           {errorMessage(error, t)}
+        </p>
+      )}
+      {data?.version.ai_error_code && (
+        <p className="ai-warning" role="status">
+          {t(`errors.${data.version.ai_error_code}`)}
         </p>
       )}
       <div className="preview-body" aria-busy={loading}>
@@ -636,7 +639,7 @@ function PreviewModal({
                   count: data?.assets.length ?? 0,
                 })}
               </span>
-              <span>{search ? t("Keyword matches") : t("Original order")}</span>
+              <span>{t(search ? "Keyword matches" : "Original order")}</span>
             </div>
             {data?.chunks.length === 0 && (
               <p className="empty-text">
@@ -656,6 +659,18 @@ function PreviewModal({
                   </span>
                 </div>
                 <p>{chunk.content}</p>
+                {(language === "hu"
+                  ? chunk.translation_hu
+                  : chunk.translation_en) && (
+                  <details className="ai-translation">
+                    <summary>{t("AI translation")}</summary>
+                    <p lang={language}>
+                      {language === "hu"
+                        ? chunk.translation_hu
+                        : chunk.translation_en}
+                    </p>
+                  </details>
+                )}
               </article>
             ))}
             <div className="pagination">
@@ -730,117 +745,12 @@ function PreviewModal({
   );
 }
 
-function Login({ onLogin }: { onLogin: () => void }) {
-  const { t } = useI18n();
-  const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      validateForm(event.currentTarget);
-      await api("/auth/login", {
-        method: "POST",
-        body: JSON.stringify(
-          Object.fromEntries(new FormData(event.currentTarget)),
-        ),
-      });
-      onLogin();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="login-page">
-      <div className="login-language">
-        <LanguageSwitcher />
-      </div>
-      <div className="login-art">
-        <div className="brand">
-          <Icon name="books" />
-          <span>
-            {t("RuleShelf")}
-            <span className="brand-dot">.</span>
-          </span>
-        </div>
-        <span className="eyebrow">{t("EVERY GREAT GAME STARTS HERE")}</span>
-        <h1>
-          {t("Rules deserve")}
-          <br />
-          {t("their own")}
-          <br />
-          <em>{t("shelf.")}</em>
-        </h1>
-        <p>
-          {t(
-            "Keep your board game rulebooks together so the rules are always within reach during play.",
-          )}
-        </p>
-        <div className="book-art" aria-hidden="true">
-          <span>{t("RULES")}</span>
-          <span>{t("A GOOD TURN")}</span>
-          <span>{t("GAME LIBRARY")}</span>
-          <span>{t("LET’S PLAY!")}</span>
-        </div>
-      </div>
-      <div className="login-panel">
-        <div className="login-form">
-          <span className="login-lock">
-            <Icon name="lock" />
-          </span>
-          <span className="eyebrow">{t("ADMIN INTERFACE")}</span>
-          <h2>{t("Welcome to RuleShelf")}</h2>
-          <p>{t("Sign in to manage your collection.")}</p>
-          <form onSubmit={submit} noValidate>
-            <label>
-              {t("Username")}
-              <input
-                name="username"
-                autoComplete="username"
-                defaultValue="admin"
-                required
-              />
-            </label>
-            <label>
-              {t("Password")}
-              <input
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                autoFocus
-              />
-            </label>
-            {!!error && (
-              <p className="error" role="alert">
-                {errorMessage(error, t)}
-              </p>
-            )}
-            <button className="button primary full" disabled={busy}>
-              {busy ? t("Signing in…") : t("Sign in")}
-              <Icon name="arrow" />
-            </button>
-          </form>
-          <small>
-            {t("Find your sign-in details in the")}
-            <br />
-            <code>infra/.env</code> {t("file created during setup.")}
-          </small>
-        </div>
-        <span className="login-footnote">
-          {t("Your collection. Your home.")}
-        </span>
-      </div>
-    </main>
-  );
-}
-
 export default function App() {
   const { t, language } = useI18n();
-  const [auth, setAuth] = useState<"loading" | "in" | "out">("loading");
+  const [ai, setAi] = useState<{
+    processing: boolean;
+    explanations: boolean;
+  } | null>(null);
   const [games, setGames] = useState<Game[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -856,31 +766,32 @@ export default function App() {
   const [revision, setRevision] = useState(0);
   const game = games.find((g) => g.id === selected);
   const refresh = () => setRevision((v) => v + 1);
-  function handleError(e: unknown) {
-    if (e instanceof ApiError && e.status === 401) setAuth("out");
-    else setError(e);
-  }
   useEffect(() => {
-    api("/auth/me")
-      .then(() => setAuth("in"))
-      .catch(() => setAuth("out"));
+    const controller = new AbortController();
+    api<{ processing: boolean; explanations: boolean }>("/ai/status", {
+      signal: controller.signal,
+    })
+      .then(setAi)
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e);
+      });
+    return () => controller.abort();
   }, []);
   useEffect(() => {
-    if (auth !== "in") return;
     const controller = new AbortController();
     setLoading(true);
     api<Game[]>("/games", { signal: controller.signal })
       .then(setGames)
       .catch((e) => {
-        if (!controller.signal.aborted) handleError(e);
+        if (!controller.signal.aborted) setError(e);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [auth, revision]);
+  }, [revision]);
   useEffect(() => {
-    if (!selected || auth !== "in") {
+    if (!selected) {
       setDocuments([]);
       return;
     }
@@ -895,7 +806,7 @@ export default function App() {
         });
         if (active) setDocuments(docs);
       } catch (e) {
-        if (active && !controller.signal.aborted) handleError(e);
+        if (active && !controller.signal.aborted) setError(e);
       } finally {
         if (active) setDocLoading(false);
       }
@@ -907,118 +818,58 @@ export default function App() {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [selected, auth, revision]);
+  }, [selected, revision]);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 5000);
     return () => window.clearTimeout(timer);
   }, [notice]);
-  async function processDocument(doc: Document) {
+  async function processDocument(doc: Document, aiOnly = false) {
     setPending(doc.id);
     setError("");
     try {
-      await api(`/documents/${doc.id}/process`, { method: "POST" });
+      await api(`/documents/${doc.id}/${aiOnly ? "ai-process" : "process"}`, {
+        method: "POST",
+      });
       refresh();
       setNotice("Processing has been queued.");
     } catch (e) {
-      handleError(e);
+      setError(e);
     } finally {
       setPending(null);
     }
   }
-  async function logout() {
-    try {
-      await api("/auth/logout", { method: "POST" });
-      setAuth("out");
-      setGames([]);
-      setSelected(null);
-    } catch (e) {
-      handleError(e);
-    }
-  }
-  if (auth === "loading")
-    return (
-      <div className="startup">
-        <Icon name="books" />
-        <p>{t("Loading RuleShelf…")}</p>
-      </div>
-    );
-  if (auth === "out") return <Login onLogin={() => setAuth("in")} />;
   const filtered = games.filter((g) =>
     `${g.title} ${g.edition}`
       .toLocaleLowerCase(language)
       .includes(filter.toLocaleLowerCase(language)),
   );
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <Icon name="books" />
-          <span>
-            {t("RuleShelf")}
-            <span className="brand-dot">.</span>
-          </span>
-        </div>
-        <span className="sidebar-caption">{t("YOUR GAME SHELF")}</span>
-        <button className="nav-item active" onClick={() => setSelected(null)}>
-          <Icon name="books" />
-          {t("Game collection")}
-          <span>{games.length}</span>
-        </button>
-        <div className="sidebar-note">
-          <span className="note-star">✳</span>
-          <p>
-            {t("Less page turning.")}
-            <br />
-            <strong>{t("More playing.")}</strong>
-          </p>
-          <small>{t("A good answer starts with the right rulebook.")}</small>
-        </div>
-        <div className="sidebar-bottom">
-          <a href="/" className="player-link">
-            <Icon name="search" />
-            {t("Ask the rules")}
-          </a>
-          <div className="admin-profile">
-            <span>A</span>
-            <div>
-              <strong>{t("Administrator")}</strong>
-              <small>{t("Manage collection")}</small>
-            </div>
-          </div>
-          <button onClick={logout} className="logout">
-            <Icon name="logout" />
-            {t("Sign out")}
-          </button>
-        </div>
-      </aside>
-      <main className="workspace">
-        <header className="topbar">
-          <span>
-            {t("COLLECTION")} / {game ? t("GAME DETAILS") : t("OVERVIEW")}
-          </span>
-          <LanguageSwitcher />
-          <span className="local-indicator">
-            <i />
-            {t("Your rule library")}
-          </span>
-        </header>
+    <div className="admin-app">
+      <main className="admin-main">
         <div className="main-content">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">{t("A PLACE FOR EVERY RULE")}</span>
-              <h1>{game ? game.title : t("Your game shelf")}</h1>
-              <p>
-                {game
-                  ? game.edition || t("Rule material and processing")
-                  : t("Upload your rulebooks. We’ll help you organize them.")}
-              </p>
+              <h1>{game ? game.title : t("Game collection")}</h1>
+              {game?.edition && <p>{game.edition}</p>}
             </div>
             <button className="button primary" onClick={() => setForm("new")}>
               <Icon name="plus" />
               {t("New game")}
             </button>
           </div>
+          {ai && (
+            <p className="admin-ai-status">
+              <Icon name={ai.explanations ? "check" : "file"} />
+              {t(
+                ai.processing
+                  ? "AI processing and explanations enabled"
+                  : ai.explanations
+                    ? "AI explanations enabled"
+                    : "AI unavailable · Set OPENAI_API_KEY in infra/.env",
+              )}
+            </p>
+          )}
           {!!error && (
             <div className="error global-error" role="alert">
               {errorMessage(error, t)}
@@ -1033,38 +884,10 @@ export default function App() {
           )}
           {!game ? (
             <>
-              <div className="stats">
-                <div>
-                  <span>{t("GAMES ON THE SHELF")}</span>
-                  <strong>{games.length.toString().padStart(2, "0")}</strong>
-                  <Icon name="books" />
-                </div>
-                <div>
-                  <span>{t("RULE DOCUMENTS")}</span>
-                  <strong>
-                    {games
-                      .reduce((n, g) => n + g.document_count, 0)
-                      .toString()
-                      .padStart(2, "0")}
-                  </strong>
-                  <Icon name="file" />
-                </div>
-                <div>
-                  <span>{t("PUBLISHED RULEBOOKS")}</span>
-                  <strong>
-                    {games
-                      .reduce((n, g) => n + g.published_count, 0)
-                      .toString()
-                      .padStart(2, "0")}
-                  </strong>
-                  <Icon name="check" />
-                </div>
-              </div>
               <div className="collection-toolbar">
-                <h2>
-                  {t("Game collection")}
-                  <span>{games.length}</span>
-                </h2>
+                <span className="collection-count">
+                  {t("{count} game(s)", { count: games.length })}
+                </span>
                 <div className="search-field">
                   <Icon name="search" />
                   <input
@@ -1079,31 +902,19 @@ export default function App() {
                 <p className="loading">{t("Loading collection…")}</p>
               ) : games.length === 0 ? (
                 <section className="empty-state">
-                  <div className="empty-books" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <span className="eyebrow">
-                    {t("YOUR COLLECTION STARTS HERE")}
-                  </span>
-                  <h2>{t("There’s room for your first game.")}</h2>
-                  <p>
-                    {t("Add a board game, then upload its rulebook.")}
-                    <br />
-                    {t("Start with a PDF, an image or plain text.")}
-                  </p>
+                  <h2>{t("No games yet")}</h2>
+                  <p>{t("Add a board game, then upload its rulebook.")}</p>
                   <button
                     className="button primary"
                     onClick={() => setForm("new")}
                   >
                     <Icon name="plus" />
-                    {t("Add your first game")}
+                    {t("New game")}
                   </button>
                 </section>
               ) : (
                 <div className="game-grid">
-                  {filtered.map((g, index) => (
+                  {filtered.map((g) => (
                     <button
                       className="game-card"
                       key={g.id}
@@ -1112,24 +923,17 @@ export default function App() {
                         setError("");
                       }}
                     >
-                      <div className={`game-cover cover-${index % 4}`}>
-                        <span className="cover-edition">
-                          {t("{language} rules", {
-                            language: t(languageName[g.language] ?? g.language),
-                          })}
-                        </span>
-                        <span className="cover-mark" aria-hidden="true">
-                          {["✳", "◈", "✺", "⬡"][index % 4]}
-                        </span>
-                        <strong>{g.title}</strong>
-                        <span className="cover-bottom">
-                          {g.edition || t("Board game")}
-                          <Icon name="books" />
-                        </span>
-                      </div>
+                      <span className="game-card-icon">
+                        <Icon name="books" />
+                      </span>
                       <div className="game-card-info">
                         <div>
                           <strong>{g.title}</strong>
+                          {g.edition && (
+                            <span className="game-card-edition">
+                              {g.edition}
+                            </span>
+                          )}
                           <small>
                             {t("{count} document(s)", {
                               count: g.document_count,
@@ -1143,13 +947,6 @@ export default function App() {
                       </div>
                     </button>
                   ))}
-                  <button className="add-card" onClick={() => setForm("new")}>
-                    <span>
-                      <Icon name="plus" />
-                    </span>
-                    <strong>{t("Add another game")}</strong>
-                    <small>{t("Grow your collection")}</small>
-                  </button>
                   {filtered.length === 0 && (
                     <p className="empty-text">
                       {t("No matching game in your collection.")}
@@ -1157,27 +954,6 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div className="how-it-works">
-                <span className="eyebrow">
-                  {t("HOW DOES A RULEBOOK REACH YOUR SHELF?")}
-                </span>
-                <div>
-                  <span>
-                    <b>01</b>
-                    {t("Add game")}
-                  </span>
-                  <Icon name="arrow" />
-                  <span>
-                    <b>02</b>
-                    {t("Upload rule material")}
-                  </span>
-                  <Icon name="arrow" />
-                  <span>
-                    <b>03</b>
-                    {t("Review and publish")}
-                  </span>
-                </div>
-              </div>
             </>
           ) : (
             <>
@@ -1197,13 +973,8 @@ export default function App() {
                 </button>
               </div>
               <section className="game-info">
-                <div className="game-emblem">✳</div>
                 <div>
-                  <span className="eyebrow">{t("GAME DETAILS")}</span>
-                  <p>
-                    {game.description ||
-                      t("No description has been added for this game.")}
-                  </p>
+                  {game.description && <p>{game.description}</p>}
                   <span className="metadata">
                     {t(languageName[game.language] ?? game.language)} ·{" "}
                     {game.edition || t("Edition not specified")}
@@ -1258,6 +1029,9 @@ export default function App() {
                         <div className="document-title">
                           <h3>{doc.filename}</h3>
                           <Badge status={doc.status} />
+                          <span className="badge">
+                            {t(`ai.${doc.ai_status}`)}
+                          </span>
                         </div>
                         <p className="document-meta">
                           {t(languageName[doc.language] ?? doc.language)} ·{" "}
@@ -1298,6 +1072,11 @@ export default function App() {
                             )}
                           </p>
                         )}
+                        {doc.ai_error_code && (
+                          <p className="ai-warning">
+                            {t(`errors.${doc.ai_error_code}`)}
+                          </p>
+                        )}
                         {doc.has_published && doc.status !== "published" && (
                           <p className="field-note">
                             {t(
@@ -1307,6 +1086,23 @@ export default function App() {
                         )}
                       </div>
                       <div className="document-actions">
+                        {ai?.processing &&
+                          !["queued", "processing", "uploaded"].includes(
+                            doc.status,
+                          ) &&
+                          doc.version_id && (
+                            <button
+                              className="button secondary"
+                              disabled={pending === doc.id}
+                              title={t(
+                                "Translate and index extracted rules without OCR",
+                              )}
+                              onClick={() => void processDocument(doc, true)}
+                            >
+                              <Icon name="refresh" />
+                              {t("AI processing")}
+                            </button>
+                          )}
                         {doc.published_version_id &&
                           doc.status !== "published" && (
                             <button
@@ -1370,13 +1166,6 @@ export default function App() {
               </div>
             </>
           )}
-          <footer className="workspace-footer">
-            <span>
-              {t("RuleShelf")}
-              <b>·</b> Admin
-            </span>
-            <span>{t("For your next great game.")}</span>
-          </footer>
         </div>
       </main>
       {notice && (

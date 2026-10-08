@@ -15,12 +15,14 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 - Játékok felvétele és szerkesztése: kiadás, leírás és a szabálykönyv nyelve.
 - PDF, TXT, Markdown, PNG, JPG és WebP feltöltése vagy szöveg közvetlen beillesztése.
 - PDF-ek és képek feldolgozása Doclinggal és OCR-rel, külön háttérfolyamatban.
+- Beállított OpenAI mellett a kinyert szabályok angol és magyar fordítása, többnyelvű szemantikus index PostgreSQL/pgvector alapon. Az eredeti szöveg és forráshely megmarad.
+- **AI-feldolgozás** a már kinyert szabálykönyvön újabb OCR nélkül; ellenőrizhető fordítások az új változat közzététele előtt.
 - Elérhető NVIDIA GPU előnyben részesítése; GPU hiányában CPU, GPU-s konverziós hiba után egyszeri CPU-s újrapróbálkozás.
 - Kinyert szabályrészek ellenőrzése forrásoldalakkal, kulcsszavas kereséssel és eredeti ábrákkal.
 - Ellenőrzött változat közzététele. Újrafeldolgozáskor a korábban közzétett változat az új jóváhagyásáig megmarad.
 - Választható angol és magyar nyelv az adminfelületen, párbeszédablakokban, ellenőrző üzenetekben, API-hibákban és feldolgozási állapotokban. A böngésző megjegyzi a választást.
 - Tartós adatbázis-, dokumentum- és modellvolume-ok.
-- Szerveroldali munkamenettel védett adminműveletek és még nem közzétett anyagok. A közzétett tartalom a beállított helyi címen adminbelépés nélkül olvasható.
+- Belépés nélkül elérhető kérdező- és adminfelület, két felső menüponttal. Az adminműveleteket mindenki eléri, aki az otthoni hálózaton hozzáfér az alkalmazáshoz.
 
 ## Bemutatás
 
@@ -34,24 +36,24 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 
 ### Gyűjtemény kezelése
 
-1. Nyisd meg az [adminfelületet](http://localhost:8080/admin), jelentkezz be, és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
+1. Nyisd meg az [adminfelületet](http://localhost:8080/admin), és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
 2. Nyisd meg a játékot, majd válaszd a **Szabályanyag feltöltése** gombot. Válassz fájlokat vagy a **Szöveg beillesztése** lehetőséget. A Markdown-címek segítik a tagolást.
 3. Hagyd bekapcsolva a **Feldolgozás indítása a feltöltés után** lehetőséget, vagy indítsd el később kézzel. A dokumentum mellett megjelenik a folyamat és az esetleges hiba.
 4. A feldolgozás végén nyisd meg az **Ellenőrzés** nézetet. Keress a szövegben, ellenőrizd a forrásoldalakat és ábrákat; szükség esetén töltsd le az eredetit.
 5. Az **Ellenőriztem, közzéteszem** gombbal hagyd jóvá a változatot. Az **Újrafeldolgozás** új változatot készít, a korábbi közzétett továbbra is elérhető.
 
-A nyelvválasztó a kérdezőfelületen, a belépésnél, az adminfejlécben és a párbeszédablakokban is elérhető. A felület nyelvének megváltoztatása nem fordítja le és nem módosítja a feltöltött szabálykönyveket, játékneveket, leírásokat vagy képaláírásokat. A szabálykönyv nyelve külön adat.
+A nyelvválasztó a közös fejlécben és a párbeszédablakokban is elérhető. A felület nyelvének megváltoztatása nem fordítja le és nem módosítja a feltöltött szabálykönyveket, játékneveket, leírásokat vagy képaláírásokat. A szabálykönyv nyelve külön adat.
 
 Jelenlegi korlátok: alapértelmezetten 50 MB fájlonként, 100 oldal dokumentumonként, 30 perces feldolgozási időkorlát. Több feltöltött kép külön dokumentumként kerül be. A forráshely a PDF tényleges oldalsorszáma, nem a nyomtatott oldalcímke. Az OCR eredményét embernek is ellenőriznie kell.
 
-A keresés jelenleg kulcsszavas, szókezdetekkel és szomszédos szakaszokkal, így a közeli példák és kivételek is bekerülhetnek. Bekapcsolt AI mellett a kisebb kiválasztott szabálykönyvek teljes szövegét adjuk át, legfeljebb 40 keresési darabig és 32 000 szöveg-/címkarakterig; nagyobb anyagnál korlátozott keresési részleteket. A többnyelvű szemantikus keresés, automatikus szabálykönyv-fordítás, pontos kártya-/ábrakapcsolatok, PWA-telepítés és beszélgetési kontextus későbbi feladatok. A teljes szöveges keresés működik, a pgvector elő van készítve. Nagy idegen nyelvű könyvnél szükség lehet az eredeti szakkifejezésekre. A forrásazonosítókat ellenőrizzük, de a válaszminőséget saját szabálykönyveken is értékelni kell.
+A keresés többnyelvű kulcsszavas találatokat és pgvector-alapú szemantikus hasonlóságot egyesít a szomszédos szabályrészekkel. Bekapcsolt AI mellett a kisebb kiválasztott szabálykönyvek teljes szövegét adjuk át, legfeljebb 40 darabig és 32 000 szöveg-/címkarakterig; nagyobb anyagnál korlátozott részleteket. A fordítások és témakulcsszavak a keresést segítik, de a magyarázatok mindig az eredeti szabályra hivatkoznak. A pontos kártya-/ábrakapcsolatok, PWA és beszélgetési kontextus későbbi feladatok. Távoli kivételek kimaradhatnak; a forrásazonosítók ellenőrzése nem bizonyítja minden magyarázat helyességét.
 
 ### Összetevők
 
 | Mappa | Feladat |
 | --- | --- |
 | `frontend/` | React, TypeScript és Vite kérdező-/adminfelület; angol/magyar fordítási fájlok |
-| `backend/app/` | FastAPI API, belépés, OCR-feldolgozó és PostgreSQL-alapú worker |
+| `backend/app/` | FastAPI API, OCR-feldolgozó és PostgreSQL-alapú worker |
 | `backend/migrations/` | Verziózott adatbázis-migrációk |
 | `backend/tests/` | Backend-integrációs és feldolgozási ellenőrzések |
 | `e2e/` | Chromium-ellenőrzések az adminfolyamathoz és nyelvváltáshoz |
@@ -82,9 +84,11 @@ Linux/Proxmox virtuális gép:
 sh infra/start.sh
 ```
 
-Az indító szükség esetén létrehozza az `infra/.env` fájlt, felépíti az image-eket, és ideiglenes konténerben CUDA-műveletet futtat. Sikeres próba esetén az `infra/compose.gpu.yaml` kiegészítővel indul; egyébként CPU-s konfigurációt választ. A meglévő belépési adatok megmaradnak.
+Az indító szükség esetén létrehozza az `infra/.env` fájlt, felépíti az image-eket, és ideiglenes konténerben CUDA-műveletet futtat. Sikeres próba esetén az `infra/compose.gpu.yaml` kiegészítővel indul; egyébként CPU-s konfigurációt választ. A meglévő beállítások megmaradnak.
 
-A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. A kezdeti admin felhasználónév `admin`. A generált jelszót az `infra/.env` fájl `ADMIN_PASSWORD` mezőjében találod. Ezt a fájlt kezeld titokként, és ne tedd verziókezelésbe.
+A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. Az admin nem kér belépést. A felső **Kérdezés** és **Admin** menüponttal válthatsz a felületek között. Az `infra/.env` fájlt kezeld titokként, és ne tedd verziókezelésbe.
+
+Meglévő szabálykönyvnél válaszd a dokumentum **AI-feldolgozás**, majd **Ellenőrzés** gombját. Az **AI-fordítás** részben a felület nyelvén olvashatod a fordítást; ellenőrzés után tedd közzé. Addig a korábbi közzétett változat marad használatban. Új feltöltésnél az AI-szakasz automatikusan fut, ha engedélyezett. A teljes kinyert szöveg az OpenAI-hoz kerül fordításra és indexelésre; a képek helyben maradnak. AI-hiba esetén az eredeti szöveg megmarad, a felület figyelmeztet.
 
 ### 3. Beállítások
 
@@ -94,26 +98,30 @@ Módosítsd az `infra/.env` fájlt, majd futtasd újra az indítót.
 | --- | --- | --- |
 | `APP_BIND_ADDRESS` | `127.0.0.1` | A Docker hoston publikált cím |
 | `APP_PORT` | `8080` | HTTP-port a hoston |
-| `ADMIN_USERNAME` | `admin` | Admin felhasználónév |
-| `ADMIN_PASSWORD` | Generált | Adminjelszó; legalább 12 karakter |
 | `POSTGRES_PASSWORD` | Generált | Adatbázisjelszó; az adatbázis-volume-mal együtt őrizd meg |
-| `COOKIE_SECURE` | `false` | HTTPS használatakor `true` |
 | `MAX_UPLOAD_MB` | `50` | Szerveroldali feltöltési méretkorlát |
 | `MAX_DOCUMENT_PAGES` | `100` | PDF-/képfeldolgozás oldalkorlátja |
 | `PROCESSING_DEVICE` | `auto` | Használható CUDA előnyben; `cpu` esetén CPU-ra kényszerítés |
 | `OPENAI_API_KEY` | Üres | Szerveroldali OpenAI-kulcs; üresen csak helyi szabálykeresés |
-| `OPENAI_ANSWER_MODEL` | `gpt-4.1-mini` | Strukturált kimenetet támogató Responses API-modell |
+| `OPENAI_PROCESSING_MODEL` | `gpt-6-luna` | Szabályfordítás és két nyelvű témakulcsszavak |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Többnyelvű szemantikus modell, 1536 dimenzió |
+| `AI_PROCESSING_ENABLED` | `true` | AI-fordítás és indexelés beállított kulccsal |
+| `AI_MAX_CHUNKS` | `2000` | Szabályrészek maximális száma AI-feladatonként |
+| `AI_MAX_CHARACTERS` | `600000` | Eredeti szöveg maximális karakterszáma AI-feladatonként |
+| `OPENAI_ANSWER_MODEL` | `gpt-6-luna` | Strukturált kimenetet támogató Responses API-modell |
 | `OPENAI_TRANSCRIPTION_MODEL` | `gpt-transcribe` | Beszédfelismerési modell |
 
 A felület nyelve böngészőben tárolt választás, alapértelmezetten angol. Az API-kliensek `Accept-Language: en` vagy `Accept-Language: hu` fejlécet küldhetnek. A hibák és feldolgozási üzenetek állandó kódot és lefordított szöveget is tartalmaznak. Nem támogatott nyelvnél angolra váltunk.
 
 #### Magyarázat és hangbevitel bekapcsolása
 
-Az `infra/.env` fájlban helyben állítsd be az `OPENAI_API_KEY` értékét. A setup megőrzi a meglévő fájlokat; régebbi fájlhoz szükség esetén add hozzá a fenti három OpenAI-beállítást. A kulcs ne kerüljön a frontend konfigurációjába. A beállítás alkalmazásához csak az API-t kell újralétrehozni:
+Az `infra/.env` fájlban helyben állítsd be az `OPENAI_API_KEY` értékét. A setup megőrzi a meglévő fájlokat; régebbi fájlhoz szükség esetén add hozzá a fenti OpenAI-beállításokat. A kulcs ne kerüljön a frontend konfigurációjába. A beállítás alkalmazásához az API-t és a workert is újra kell létrehozni:
 
 ```sh
-docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api
+docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api worker
 ```
+
+GPU-s worker esetén a fenti parancsban add meg az `-f infra/compose.gpu.yaml` kiegészítőt is. A beállítás az API és a worker újraindítása után érvényes. Meglévő nagy könyvnél az **AI-feldolgozás** és közzététel teszi elérhetővé a többnyelvű szemantikus keresést. A fordítás és indexelés fizetős OpenAI-hívásokat használhat. Az **AI-indexelt** állapot minden részhez fordítást és embeddinget jelez; a **Részleges AI-index** csak részben elkészült adatokat. A korlát túllépése nem törli a kinyert szabályokat.
 
 Frissítsd a kérdezőfelületet. A magyarázathoz a kérdés és a kiválasztott szabályrészletek, a beszédfelismeréshez a hangfelvétel kerül az OpenAI-hoz. A generált válaszokhoz `store=false` beállítást küldünk. Az alkalmazás sem a hangot, sem a kérdéselőzményeket nem menti adatbázisba; a szolgáltatói adatkezelésre az OpenAI-fiókod beállításai érvényesek. Érvényes kulcs, modellhozzáférés és internet szükséges. Szolgáltatói hibánál az eredeti szabályszöveg keresése marad használható.
 
@@ -123,7 +131,7 @@ A mikrofonhoz HTTPS vagy `localhost`, támogatott böngésző és mikrofonenged�
 
 ### 4. Kézi Compose-indítás
 
-Ha még nincs `.env`, előbb generáld a belépési adatokat a `./infra/setup.ps1` vagy `sh infra/setup.sh` paranccsal.
+Ha még nincs `.env`, előbb generáld az adatbázisjelszót a `./infra/setup.ps1` vagy `sh infra/setup.sh` paranccsal.
 
 CPU/GPU nélküli konténer:
 
@@ -147,7 +155,7 @@ A RapidOCR súlyfájljai a `/models/docling/rapidocr` könyvtárban tárolódnak
 
 Állítsd be az `APP_BIND_ADDRESS=0.0.0.0` értéket, indítsd újra az alkalmazást, majd telefonról, tabletről vagy számítógépről nyisd meg a `http://<szerver-ip>:8080` címet. Szükség szerint engedélyezd a választott portot a host tűzfalán.
 
-A jelenlegi Compose-konfiguráció HTTP-t szolgál ki. Tartós Proxmox-telepítéshez belső DNS és megbízható HTTPS szükséges: az `infra/Caddyfile` `:80` címét cseréld a belső hostnévre, engedélyezd a `tls internal` beállítást, publikáld a HTTPS-portot a Compose-ban, és tedd tartóssá a Caddy `/data` és `/config` könyvtárait. A klienseszközökön tedd megbízhatóvá a Caddy gyökértanúsítványát, és állítsd be a `COOKIE_SECURE=true` értéket. A HTTPS külön konfigurációs lépés, az alapindító nem kapcsolja be.
+A jelenlegi Compose-konfiguráció HTTP-t szolgál ki. Tartós Proxmox-telepítéshez belső DNS és megbízható HTTPS szükséges: az `infra/Caddyfile` `:80` címét cseréld a belső hostnévre, engedélyezd a `tls internal` beállítást, publikáld a HTTPS-portot a Compose-ban, és tedd tartóssá a Caddy `/data` és `/config` könyvtárait. A klienseszközökön tedd megbízhatóvá a Caddy gyökértanúsítványát. A HTTPS külön konfigurációs lépés, az alapindító nem kapcsolja be.
 
 ### 6. Állapot, frissítés és leállítás
 
@@ -204,15 +212,16 @@ A törlőscript visszautasítja a tesztelőtag nélküli játékokat. A backendt
 - **Nem használ GPU-t:** ellenőrizd a host driverét és a Docker GPU-hozzáférését. Sikertelen CUDA-próbánál CPU-val indul. A `PROCESSING_DEVICE=cpu` szándékosan letiltja a GPU-feldolgozást.
 - **Az első OCR lassú:** valószínűleg modelleket tölt le. Nézd meg a worker és a feladat feldolgozási naplóját. A meglévő modelleket újra felhasználjuk.
 - **Egy dokumentum sikertelen:** ellenőrizd a formátumot, méretet, oldalszámot és olvashatóságot, majd indítsd újra. A korábbi közzétett változat megmarad.
-- **Nem sikerül belépni:** ellenőrizd az `infra/.env` `ADMIN_USERNAME` és `ADMIN_PASSWORD` értékét, majd konfigurációváltozás után indítsd újra az alkalmazást.
 - **Mobilról nem elérhető:** ellenőrizd a bind címet, szerver IP-jét és tűzfalát; a `127.0.0.1` csak a hoston enged hozzáférést.
 
-Az API és a PostgreSQL belső szolgáltatások. A Caddy szolgálja ki a frontendet, és ugyanazon eredeten továbbítja az `/api` kéréseket. Az `/api/play` csak közzétett anyagot ad az otthoni játékosoknak; az adminvégpontok belépést kérnek. Az admincookie HttpOnly, 12 órás; a munkamenet-tokenek hash formában tárolódnak. A worker tartós PostgreSQL-feladatokat foglal megújítható lease-szel és foglalási tokennel, majd a kinyert tartalmat és a sikeres állapotot egy tranzakcióban menti.
+Az API és a PostgreSQL belső szolgáltatások. A Caddy szolgálja ki a frontendet, és ugyanazon eredeten továbbítja az `/api` kéréseket. Az `/api/play` csak közzétett anyagot ad az otthoni játékosoknak; az adminvégpontok belépés nélkül elérhetők, az írási műveletekkel és a még nem közzétett anyagokkal együtt, megbízható otthoni hálózatra. A worker tartós PostgreSQL-feladatokat foglal megújítható lease-szel és foglalási tokennel, majd a kinyert tartalmat és a sikeres állapotot egy tranzakcióban menti.
 
 ## Hivatkozott dokumentáció
 
+- [AI-megvalósítás és ellenőrzés (angol)](docs/ai-validation.md)
 - [FastAPI fájlfeltöltés és hibák](https://fastapi.tiangolo.com/tutorial/request-files/)
 - [React context](https://react.dev/reference/react/useContext)
+- [OpenAI embeddingek](https://developers.openai.com/api/docs/guides/embeddings)
 - [OpenAI strukturált kimenet](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI hangfelvétel átírása](https://developers.openai.com/api/docs/guides/speech-to-text)
 - [Docling](https://github.com/docling-project/docling)

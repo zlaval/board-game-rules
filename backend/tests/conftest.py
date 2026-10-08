@@ -9,6 +9,8 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 
 def pytest_configure(config):
+    # Never make paid provider calls from tests, including processing subprocesses.
+    os.environ["OPENAI_API_KEY"] = ""
     # Integration tests always get their own database; application data is untouched.
     original = os.environ["DATABASE_URL"]
     name = f"rules_test_{uuid4().hex}"
@@ -36,16 +38,10 @@ def pytest_unconfigure(config):
 def client():
     from fastapi.testclient import TestClient
 
-    from app import config
     from app.db import connect
     from app.main import app
 
     with connect() as db:
-        db.execute("TRUNCATE games,sessions CASCADE")
+        db.execute("TRUNCATE games CASCADE")
     with TestClient(app) as test_client:
-        response = test_client.post(
-            "/api/auth/login",
-            json={"username": config.ADMIN_USERNAME, "password": config.ADMIN_PASSWORD},
-        )
-        assert response.status_code == 200
         yield test_client

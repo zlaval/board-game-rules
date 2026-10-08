@@ -106,21 +106,40 @@ export function useI18n() {
 export function LanguageSwitcher() {
   const { language, setLanguage, t } = useI18n();
   return (
-    <label className="language-switcher">
-      <span>{t("Interface language")}</span>
-      <select
-        aria-label={t("Interface language")}
-        value={language}
-        onChange={(e) => setLanguage(e.target.value as Language)}
+    <div
+      className="language-switcher"
+      role="group"
+      aria-label={t("Interface language")}
+    >
+      <button
+        type="button"
+        aria-label="English"
+        title="English"
+        aria-pressed={language === "en"}
+        onClick={() => setLanguage("en")}
       >
-        <option value="en" lang="en">
-          English
-        </option>
-        <option value="hu" lang="hu">
-          Magyar
-        </option>
-      </select>
-    </label>
+        <svg viewBox="0 0 32 20" aria-hidden="true">
+          <path fill="#244782" d="M0 0h32v20H0z" />
+          <path stroke="#fff" strokeWidth="5" d="m0 0 32 20M32 0 0 20" />
+          <path stroke="#cc3044" strokeWidth="2" d="m0 0 32 20M32 0 0 20" />
+          <path stroke="#fff" strokeWidth="8" d="M16 0v20M0 10h32" />
+          <path stroke="#cc3044" strokeWidth="4" d="M16 0v20M0 10h32" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label="Magyar"
+        title="Magyar"
+        aria-pressed={language === "hu"}
+        onClick={() => setLanguage("hu")}
+      >
+        <svg viewBox="0 0 32 21" aria-hidden="true">
+          <path fill="#ce3449" d="M0 0h32v7H0z" />
+          <path fill="#fff" d="M0 7h32v7H0z" />
+          <path fill="#477b57" d="M0 14h32v7H0z" />
+        </svg>
+      </button>
+    </div>
   );
 }
 

@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import config
 from .db import connect
+from .embeddings import embed_texts
 from .i18n import api_error
 
 logger = logging.getLogger(__name__)
@@ -112,17 +113,45 @@ def retrieve(db, docs, question, full_context=False):
             (versions,),
         ).fetchall(), True
     terms = search_terms(question)
-    if not terms:
-        return [], False
     expression = " | ".join(term + ":*" for term in terms)
-    matches = db.execute(
-        "SELECT "
-        + CHUNK_FIELDS
-        + joins
-        + "WHERE c.version_id=ANY(%s) AND c.search_vector @@ to_tsquery('simple',%s) "
-        "ORDER BY ts_rank_cd(c.search_vector,to_tsquery('simple',%s)) DESC,d.id,c.ordinal LIMIT 8",
-        (versions, expression, expression),
-    ).fetchall()
+    matches = (
+        db.execute(
+            "SELECT "
+            + CHUNK_FIELDS
+            + joins
+            + "WHERE c.version_id=ANY(%s) AND c.search_vector @@ to_tsquery('simple',%s) "
+            "ORDER BY ts_rank_cd(c.search_vector,to_tsquery('simple',%s)) DESC,d.id,c.ordinal LIMIT 8",
+            (versions, expression, expression),
+        ).fetchall()
+        if terms
+        else []
+    )
+    if full_context and config.OPENAI_API_KEY:
+        indexed = db.execute(
+            "SELECT 1 FROM chunks WHERE version_id=ANY(%s) AND embedding IS NOT NULL "
+            "AND embedding_model=%s LIMIT 1",
+            (versions, config.OPENAI_EMBEDDING_MODEL),
+        ).fetchone()
+        if indexed:
+            try:
+                vector = json.dumps(embed_texts([question])[0])
+                semantic = db.execute(
+                    "SELECT "
+                    + CHUNK_FIELDS
+                    + joins
+                    + "WHERE c.version_id=ANY(%s) AND c.embedding IS NOT NULL AND c.embedding_model=%s "
+                    "ORDER BY c.embedding <=> %s::vector,d.id,c.ordinal LIMIT 8",
+                    (versions, config.OPENAI_EMBEDDING_MODEL, vector),
+                ).fetchall()
+                # Reciprocal rank fusion keeps exact terms and paraphrases useful together.
+                rows, scores = {}, {}
+                for ranking in (matches, semantic):
+                    for rank, row in enumerate(ranking, 1):
+                        rows[row["id"]] = row
+                        scores[row["id"]] = scores.get(row["id"], 0) + 1 / (60 + rank)
+                matches = [rows[key] for key in sorted(scores, key=scores.get, reverse=True)][:12]
+            except Exception as error:
+                logger.warning("Semantic retrieval unavailable: %s", type(error).__name__)
     if not full_context:
         return matches, False
     # Include nearby exceptions/examples from the same version. Main hits come first.
@@ -308,7 +337,7 @@ def answer_question(game_id, body, language):
             fallback = "ai_unavailable"
     # Without a checked explanation, show literal search hits; never pretend they are an answer.
     with connect() as db:
-        matches, _ = retrieve(db, docs, body.question)
+        matches = chunks
         figures = related_assets(db, matches)
     return {
         **result,

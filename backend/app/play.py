@@ -1,4 +1,4 @@
-"""Household reader endpoints: no access to drafts or administrator credentials."""
+"""Household reader endpoints: only published material is available here."""
 
 from pathlib import Path
 from typing import Annotated

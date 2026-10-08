@@ -64,3 +64,9 @@ Az alkalmazás helyi fejlesztői HTTP-elérése `http://localhost:8080`. A Proxm
 - A végleges API és worker mellett az új PDF- és PNG-próba is sikeres: mindkettő `cuda:0` / `torch` eszközzel futott, CPU-fallback nélkül; a PDF két eredeti ábrája és a forrásoldalak megmaradtak.
 - Az ellenőrzésekhez létrehozott saját próba-játékokat és dokumentumokat célzottan eltávolítottuk.
 
+
+## Frissítés: admin belépés eltávolítása
+
+Az otthoni használathoz az adminfelület és az admin API belépés nélkül érhető el. A közös felső menü Kérdezés és Admin pontja vált a nézetek között. A korábbi belépésre és kijelentkezésre vonatkozó ellenőrzések történeti állapotot írnak le.
+
+Ellenőrzés: frontend build; 4 célzott API-teszt elkülönített adatbázisban (belépés nélküli olvasás/írás, origin-ellenőrzés, szerkesztés és lokalizált hiba); Chromium menüváltás angolul és magyarul, 1366/768/390/320 px méretben. Nem futott OCR, dokumentumfeldolgozás vagy OpenAI-kérés. A gyors böngészőpróba: `e2e/navigation.mjs` (`npm run test:navigation`).

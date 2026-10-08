@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Icon, Modal } from "./App";
 import { api } from "./api";
-import { errorMessage, LanguageSwitcher, useI18n } from "./i18n";
+import { errorMessage, useI18n } from "./i18n";
 import type {
   Capabilities,
   PlayerGame,
@@ -224,33 +224,13 @@ export default function Player() {
     busy || voice.recording || voice.transcribing || voice.requesting;
   return (
     <div className="player-app">
-      <header className="player-topbar">
-        <a href="/" className="brand">
-          <Icon name="books" />
-          <span>
-            {t("RuleShelf")}
-            <span className="brand-dot">.</span>
-          </span>
-        </a>
-        <div className="player-header-actions">
-          <LanguageSwitcher />
-          <a href="/admin" className="player-admin-link">
-            {t("Manage library")} <Icon name="lock" />
-          </a>
-        </div>
-      </header>
       <main className="player-main">
         <div className="player-intro">
-          <span className="eyebrow">
-            {t("MORE PLAYING, LESS PAGE TURNING")}
-          </span>
-          <h1>{t("Ask the rules.")}</h1>
-          <p>{t("Choose your game. Find the rule. Keep playing.")}</p>
+          <h1>{t("Ask the rules")}</h1>
         </div>
         <div className="player-layout">
           <aside className="player-library" aria-label={t("Choose a game")}>
             <h2>{t("Your games")}</h2>
-            <p>{t("Only reviewed and published rulebooks appear here.")}</p>
             <label className="player-search">
               <span className="sr-only">{t("Search games")}</span>
               <Icon name="search" />
@@ -294,14 +274,14 @@ export default function Player() {
                   </select>
                 </label>
                 <div className="player-game-list">
-                  {visible.map((item, index) => (
+                  {visible.map((item) => (
                     <button
                       className={`player-game ${selected === item.id ? "selected" : ""}`}
                       key={item.id}
                       onClick={() => choose(item.id)}
                       aria-pressed={selected === item.id}
                     >
-                      <span className={`player-game-icon color-${index % 3}`}>
+                      <span className="player-game-icon">
                         <Icon name="books" />
                       </span>
                       <span>
@@ -332,25 +312,13 @@ export default function Player() {
           >
             {!game ? (
               <div className="player-welcome">
-                <span className="player-welcome-star" aria-hidden="true">
-                  ✳
-                </span>
-                <h2>{t("A good answer starts with the right game.")}</h2>
-                <p>
-                  {t(
-                    "Choose a game from your library, then ask about a turn, a card, or an exception.",
-                  )}
-                </p>
-                <div className="player-example">
-                  <Icon name="search" />
-                  <span>{t("For example: Can I move after an attack?")}</span>
-                </div>
+                <Icon name="search" />
+                <h2>{t("Choose a game")}</h2>
               </div>
             ) : (
               <>
                 <div className="player-selected">
                   <div>
-                    <span className="eyebrow">{t("YOU ARE PLAYING")}</span>
                     <h2>{game.title}</h2>
                     <p>{game.edition}</p>
                   </div>
@@ -392,11 +360,7 @@ export default function Player() {
                 {!capabilities?.explanations && capabilities && (
                   <div className="player-mode-note">
                     <Icon name="search" />
-                    <p>
-                      {t(
-                        "Search mode: matching original rule sections are available. AI explanations and voice input become available when configured by the administrator.",
-                      )}
-                    </p>
+                    <p>{t("Rule search · AI explanations are unavailable.")}</p>
                   </div>
                 )}
                 {capabilities?.explanations && (
@@ -689,16 +653,6 @@ export default function Player() {
                       </div>
                     </article>
                   ))}
-                  {!turns.length && !busy && (
-                    <div className="player-source-promise">
-                      <Icon name="file" />
-                      <p>
-                        {t(
-                          "Answers include the original rule sections, so you can check the source yourself.",
-                        )}
-                      </p>
-                    </div>
-                  )}
                 </section>
               </>
             )}
@@ -716,17 +670,10 @@ export default function Player() {
             )}
           </section>
         </div>
-        <footer className="player-footer">
-          <span>
-            {t("RuleShelf")} · {t("A place for every rule.")}
-          </span>
-          <span>{t("Your table. Your games. Your rulebooks.")}</span>
-        </footer>
       </main>
       {sourceOpen && (
         <Modal
           title={t("Original rule section")}
-          eyebrow="RULESHELF / PLAY"
           onClose={() => {
             sourceRequest.current?.abort();
             setSourceOpen(false);
@@ -766,7 +713,6 @@ export default function Player() {
       {figure && (
         <Modal
           title={figure.caption || t("Original figure")}
-          eyebrow="RULESHELF / PLAY"
           onClose={() => setFigure(null)}
           wide
         >

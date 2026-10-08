@@ -87,7 +87,8 @@ def complete(job, manifest, relative_output):
         version = job["version_id"]
         with db.cursor() as cursor:
             cursor.executemany(
-                "INSERT INTO chunks(id,version_id,ordinal,heading,content,page,source_ref,provenance) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO chunks(id,version_id,ordinal,heading,content,page,source_ref,provenance,translation_en,translation_hu,ai_keywords,embedding,embedding_model) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s)",
                 [
                     (
                         c["id"],
@@ -98,6 +99,11 @@ def complete(job, manifest, relative_output):
                         c["page"],
                         c["source_ref"],
                         Jsonb(c["provenance"]),
+                        c.get("translation_en", ""),
+                        c.get("translation_hu", ""),
+                        c.get("ai_keywords", ""),
+                        json.dumps(c["embedding"]) if c.get("embedding") else None,
+                        c.get("embedding_model"),
                     )
                     for c in manifest["chunks"]
                 ],
@@ -118,8 +124,16 @@ def complete(job, manifest, relative_output):
                 ],
             )
         db.execute(
-            "UPDATE versions SET status='ready',stage='ready',progress=100,page_count=%s,character_count=%s,processor=%s,finished_at=now() WHERE id=%s",
-            (manifest["page_count"], manifest["character_count"], manifest["processor"], version),
+            "UPDATE versions SET status='ready',stage='ready',progress=100,page_count=%s,character_count=%s,processor=%s,ai_status=%s,ai_model=%s,ai_error_code=%s,finished_at=now() WHERE id=%s",
+            (
+                manifest["page_count"],
+                manifest["character_count"],
+                manifest["processor"],
+                manifest.get("ai_status", "none"),
+                manifest.get("ai_model"),
+                manifest.get("ai_error_code"),
+                version,
+            ),
         )
         db.execute("UPDATE jobs SET state='done',lease_until=NULL WHERE id=%s", (job["id"],))
         return True
@@ -135,8 +149,10 @@ def run_job(job):
             [
                 sys.executable,
                 "-m",
-                "app.processing",
-                str(storage_path(job["document"]["source_path"])),
+                "app.enrichment" if job.get("kind") == "ai" else "app.processing",
+                str(job["source_version_id"])
+                if job.get("kind") == "ai"
+                else str(storage_path(job["document"]["source_path"])),
                 str(output),
             ],
             stdout=logfile,

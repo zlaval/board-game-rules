@@ -48,18 +48,16 @@ async function fixture(name, text, publish = true) {
   return { game, doc, version: version.version_id, preview: await api(`/versions/${version.version_id}/preview`) }
 }
 async function language(value) {
-  await page.getByRole('combobox', { name: /^(Interface language|Felület nyelve)$/ }).selectOption(value)
+  await page.getByRole('button', { name: value === 'en' ? 'English' : 'Magyar', exact: true }).click()
   await page.waitForFunction(value => document.documentElement.lang === value, value)
 }
 async function overflow() {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Horizontal overflow')
 }
 try {
-  await api('/auth/login', { username: process.env.ADMIN_USERNAME ?? 'admin', password: process.env.ADMIN_PASSWORD })
   const main = await fixture(title, rules)
   const other = await fixture(`${title} Other edition`, '# Courier\n\nThe courier may teleport to Mars.')
   const draft = await fixture(`${title} Draft`, '# Secret\n\nUnpublished rules must not appear.', false)
-  await api('/auth/logout', {})
   assert.equal((await context.request.get(`${base}/api/games`)).status(), 401)
   const realCapabilities = await api('/play/capabilities')
   // Never spend real provider credits from browser checks, even on a configured deployment.
@@ -71,7 +69,7 @@ try {
     } }))
   }
   await page.goto(uiBase)
-  await page.getByRole('heading', { name: 'Ask the rules.', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Ask the rules', exact: true }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'en')
   await page.getByRole('button', { name: `${title} 2026`, exact: true }).click()
   await page.getByLabel('Your question', { exact: true }).waitFor()
@@ -161,10 +159,10 @@ try {
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal(await page.getByLabel('Your question', { exact: true }).inputValue(), 'My edited question')
   assert.equal(transcriptionUploads, 1)
-  await page.getByRole('link', { name: 'Manage library', exact: true }).click()
-  await page.getByRole('heading', { name: 'Welcome to RuleShelf' }).waitFor()
+  await page.getByRole('link', { name: 'Admin', exact: true }).click()
+  await page.getByRole('heading', { name: 'Game collection' }).waitFor()
   assert.deepEqual(errors, [])
-  console.log('PASS: public reader, published-game isolation, literal search/no-match states, source/original links, rulebook selection, language switching, game reset/deep link, desktop/mobile/tablet, cited answer UI, real MediaRecorder with mocked transcription, cancellation, admin separation; no JavaScript errors. No real OpenAI requests made.')
+  console.log('PASS: public reader, published-game isolation, literal search/no-match states, source/original links, rulebook selection, language switching, game reset/deep link, desktop/mobile/tablet, cited answer UI, real MediaRecorder with mocked transcription, cancellation, shared top navigation; no JavaScript errors. No real OpenAI requests made.')
 } catch (error) {
   await page.screenshot({ path: '/results/player-failure.png', fullPage: true }).catch(() => {})
   throw error

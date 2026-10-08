@@ -68,9 +68,17 @@ export type Document = {
   asset_count: number;
   has_published: boolean;
   published_version_id: string | null;
+  ai_status: "none" | "complete" | "partial" | "failed" | "limited";
+  ai_error_code: string | null;
 };
 export type Preview = {
-  version: { id: string; status: string; stage: string };
+  version: {
+    id: string;
+    status: string;
+    stage: string;
+    ai_status: Document["ai_status"];
+    ai_error_code: string | null;
+  };
   chunks: {
     id: string;
     ordinal: number;
@@ -78,6 +86,8 @@ export type Preview = {
     content: string;
     page: number | null;
     source_ref: string;
+    translation_en: string;
+    translation_hu: string;
   }[];
   assets: { id: string; caption: string; page: number | null }[];
   total_chunks: number;

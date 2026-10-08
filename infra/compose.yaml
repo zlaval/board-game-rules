@@ -3,11 +3,15 @@ name: board-game-rules
 x-app-environment: &app-environment
   DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Run setup first}@postgres:5432/rules
   DATA_DIR: /data
-  ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup first}
-  COOKIE_SECURE: ${COOKIE_SECURE:-false}
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
   MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-6-luna}
+  OPENAI_PROCESSING_MODEL: ${OPENAI_PROCESSING_MODEL:-gpt-6-luna}
+  OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+  AI_PROCESSING_ENABLED: ${AI_PROCESSING_ENABLED:-true}
+  AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-2000}
+  AI_MAX_CHARACTERS: ${AI_MAX_CHARACTERS:-600000}
 
 services:
   postgres:
@@ -31,8 +35,6 @@ services:
       dockerfile: infra/Dockerfile.api
     environment:
       <<: *app-environment
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-4.1-mini}
       OPENAI_TRANSCRIPTION_MODEL: ${OPENAI_TRANSCRIPTION_MODEL:-gpt-transcribe}
     volumes:
       - documents:/data
@@ -84,6 +86,7 @@ services:
     environment:
       <<: *app-environment
       DATA_DIR: /tmp/test-data
+      OPENAI_API_KEY: ""
     depends_on:
       api:
         condition: service_healthy
@@ -94,8 +97,6 @@ services:
       context: ..
       dockerfile: infra/Dockerfile.e2e
     environment:
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run setup first}
       BASE_URL: http://frontend
     volumes:
       - ../test-results:/results

@@ -4,7 +4,7 @@ Date: 2026-10-07.
 
 ## Implemented
 
-- Public household reader at `/`; authenticated administrator at `/admin`.
+- Public household reader at `/`; household administrator at `/admin` without authentication.
 - Responsive English/Hungarian interface, English by default, with persisted language choice.
 - Published-game selection, edition display and explicit selection of published rulebooks.
 - Game URL parameter for reloading or sharing a selected game. Changing the game or rulebook selection clears question history.
@@ -14,7 +14,7 @@ Date: 2026-10-07.
 - Source dialogs, original-document links, stable text section references and PDF page references. Published PDF originals are served inline.
 - Original figures from source pages and enlargement dialogs. This is page-level association, not verified identification of a particular card or token.
 - Browser MediaRecorder capture, 60-second recording bound, 10 MB upload limit, server-side transcription, editable recognized text and cancellation.
-- Bounded provider concurrency and request rate, timeout without automatic retries, no server-side question history or recording storage. Keys are passed only to the API container.
+- Bounded provider concurrency and request rate, timeout without automatic retries, no server-side question history or recording storage. Keys are passed server-side to the API and worker containers.
 - Updated English/Hungarian README and startup configuration templates. Existing credentials are preserved.
 
 ## Verification
@@ -33,10 +33,10 @@ Date: 2026-10-07.
 
 ## Remaining acceptance and limits
 
-The running deployment currently has no configured OpenAI key. Local rule search is active. Set `OPENAI_API_KEY` in `infra/.env`, recreate the API as described in the README and refresh the reader to enable explanations and transcription. Live provider connectivity, account model access and real-answer quality are therefore not yet verified.
+OpenAI configuration enables explanations and rule processing. The API and worker both receive the server-side key. See [AI validation](ai-validation.md) for current checks; physical microphone acceptance remains separate.
 
-Retrieval is lexical rather than semantic. The full-context path permits a question in a different language for small books; larger foreign-language books may require original terminology. Distant exceptions can be missed by bounded retrieval. Evaluate on actual game rulebooks before relying on explanations. Identifier validation establishes that a source belongs to the selected material, not that every generated claim is semantically correct.
+AI-indexed books use multilingual embeddings combined with bilingual keyword search. Existing books require AI processing and publication to gain that index. The full-context path also supports different-language questions for small books. Distant exceptions can be missed by bounded retrieval. Evaluate on actual game rulebooks before relying on explanations. Identifier validation establishes that a source belongs to the selected material, not that every generated claim is semantically correct.
 
-Question history contains the latest six independent questions in browser memory. Follow-up pronouns are not resolved from previous questions. Refresh clears history. Reader access is intended for a trusted household network; published originals are deliberately public on the configured bind address. Administrator writes and drafts remain authenticated.
+Question history contains the latest six independent questions in browser memory. Follow-up pronouns are not resolved from previous questions. Refresh clears history. Reader access is intended for a trusted household network; published originals are deliberately public on the configured bind address. The admin interface now opens without authentication for trusted home-network use. The shared top menu switches between Questions and Admin; reader endpoints continue to return published material only.
 
-Microphone capture from a phone to a server IP needs trusted HTTPS. The default Compose configuration still serves HTTP. Physical Android/iOS microphone permission, recording, cancellation, transcription and source/image viewing need a separate HTTPS deployment acceptance check. PWA installation, automatic rulebook translation and semantic retrieval are not part of this change.
+Microphone capture from a phone to a server IP needs trusted HTTPS. The default Compose configuration still serves HTTP. Physical Android/iOS microphone permission, recording, cancellation, transcription and source/image viewing need a separate HTTPS deployment acceptance check. PWA installation and conversational follow-ups remain future work; AI translations and semantic retrieval are now implemented.

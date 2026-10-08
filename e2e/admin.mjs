@@ -14,7 +14,7 @@ page.on('pageerror', error => errors.push(error.message))
 page.on('request', request => { if (request.url().includes('/api/')) requestLanguages.add(request.headers()['accept-language']) })
 const title = `__e2e__ Bilingual admin ${Date.now()}`
 async function language(value, scope = page) {
-  await scope.getByRole('combobox', { name: /^(Interface language|Felület nyelve)$/ }).selectOption(value)
+  await scope.getByRole('button', { name: value === 'en' ? 'English' : 'Magyar', exact: true }).click()
   await page.waitForFunction(value => document.documentElement.lang === value, value)
 }
 async function noOverflow() {
@@ -22,21 +22,9 @@ async function noOverflow() {
 }
 try {
   await page.goto(`${base}/admin`)
-  await page.getByRole('heading', { name: 'Welcome to RuleShelf' }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'English is the default even with a Hungarian browser locale')
-  await page.getByLabel('Username', { exact: true }).fill(process.env.ADMIN_USERNAME ?? 'admin')
-  await page.getByLabel('Password', { exact: true }).fill('invalid-e2e-password')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('alert').getByText('Incorrect username or password.', { exact: true }).waitFor()
-  await language('hu')
-  await page.getByRole('heading', { name: 'Üdv a Szabálytárban' }).waitFor()
-  await page.getByRole('alert').getByText('Hibás felhasználónév vagy jelszó.', { exact: true }).waitFor()
-  await page.screenshot({ path: '/results/login-hu.png', fullPage: true })
-  await language('en')
-  await page.getByRole('alert').getByText('Incorrect username or password.', { exact: true }).waitFor()
-  await page.getByLabel('Password', { exact: true }).fill(process.env.ADMIN_PASSWORD)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('heading', { name: 'Your game shelf' }).waitFor()
+  assert.equal(await context.cookies().then(cookies => cookies.some(cookie => cookie.name === 'rules_session')), false)
+  await page.getByRole('heading', { name: 'Game collection' }).waitFor()
   await page.getByText('Loading collection…', { exact: true }).waitFor({ state: 'hidden' })
   await page.screenshot({ path: '/results/admin-desktop-en.png', fullPage: true })
   await page.getByRole('button', { name: 'New game', exact: true }).click()
@@ -108,20 +96,18 @@ try {
   await dialog.getByRole('alert').getByText('Ezt a dokumentumot már feltöltötted ehhez a játékhoz.', { exact: true }).waitFor()
   await dialog.getByRole('button', { name: 'Bezárás', exact: true }).click()
   await page.reload()
-  await page.getByRole('heading', { name: 'A játékpolcod' }).waitFor()
+  await page.getByRole('heading', { name: 'Játékgyűjtemény' }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'hu')
   assert.equal(await page.evaluate(() => localStorage.getItem('ruleshelf.language')), 'hu')
-  await page.getByRole('button', { name: 'Kijelentkezés' }).click()
-  await page.getByRole('heading', { name: 'Üdv a Szabálytárban' }).waitFor()
 
   const fresh = await browser.newContext({ locale: 'hu-HU' })
   const freshPage = await fresh.newPage()
   await freshPage.goto(`${base}/admin`)
-  await freshPage.getByRole('heading', { name: 'Welcome to RuleShelf' }).waitFor()
+  await freshPage.getByRole('heading', { name: 'Game collection' }).waitFor()
   await fresh.close()
   assert.ok(requestLanguages.has('en') && requestLanguages.has('hu'), 'API requests must carry both chosen languages')
   assert.deepEqual(errors, [])
-  console.log('PASS: English default, Hungarian/English switching in login/admin/dialogs, live error translation, persistence, unchanged rule content/metadata, processing/search/publication/reprocessing, mobile layout and logout; no JavaScript errors.')
+  console.log('PASS: English default, Hungarian/English switching in admin/dialogs, live error translation, persistence, unchanged rule content/metadata, processing/search/publication/reprocessing, mobile layout and direct admin access; no JavaScript errors.')
 } catch (error) {
   await page.screenshot({ path: '/results/failure.png', fullPage: true }).catch(() => {})
   throw error

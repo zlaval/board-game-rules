@@ -1,17 +1,12 @@
 import hashlib
-import hmac
 import logging
-import secrets
-import threading
-import time
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, File, Form, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -29,18 +24,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app):
-    if len(config.ADMIN_PASSWORD) < 12:
-        raise RuntimeError(
-            "ADMIN_PASSWORD must contain at least 12 characters. Run infra/setup.ps1 or infra/setup.sh."
-        )
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     yield
 
 
 app = FastAPI(title="RuleShelf admin API", version="0.1.0", lifespan=lifespan)
 app.include_router(play_router)
-login_attempts = defaultdict(deque)
-login_lock = threading.Lock()
+
+
+@app.get("/api/ai/status")
+def ai_status():
+    return {
+        "explanations": bool(config.OPENAI_API_KEY),
+        "processing": bool(config.OPENAI_API_KEY) and config.AI_PROCESSING_ENABLED,
+    }
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -74,29 +71,6 @@ async def same_origin(request: Request, call_next):
     return response
 
 
-def token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def require_admin(request: Request):
-    token = request.cookies.get("rules_session", "")
-    with connect() as db:
-        session = db.execute(
-            "SELECT 1 FROM sessions WHERE token_hash = %s AND expires_at > now()",
-            (token_hash(token),),
-        ).fetchone()
-    if not session:
-        raise api_error(401, "auth_required")
-
-
-Admin = Annotated[None, Depends(require_admin)]
-
-
-class Login(BaseModel):
-    username: str = Field(max_length=100)
-    password: str = Field(max_length=500)
-
-
 class GameInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=150)
@@ -128,58 +102,6 @@ def health():
         return JSONResponse({"status": "unavailable"}, status_code=503)
 
 
-@app.post("/api/auth/login")
-def login(body: Login, request: Request, response: Response):
-    address = request.client.host if request.client else "unknown"
-    with login_lock:
-        attempts = login_attempts[address]
-        now = time.monotonic()
-        while attempts and attempts[0] < now - 60:
-            attempts.popleft()
-        if len(attempts) >= 10:
-            raise api_error(429, "login_rate_limit")
-    if not (
-        hmac.compare_digest(body.username.encode(), config.ADMIN_USERNAME.encode())
-        & hmac.compare_digest(body.password.encode(), config.ADMIN_PASSWORD.encode())
-    ):
-        with login_lock:
-            attempts.append(now)
-        raise api_error(401, "bad_credentials")
-    token = secrets.token_urlsafe(32)
-    with connect() as db:
-        db.execute("DELETE FROM sessions WHERE expires_at < now()")
-        db.execute(
-            "INSERT INTO sessions(token_hash, expires_at) VALUES (%s, now() + interval '12 hours')",
-            (token_hash(token),),
-        )
-    response.set_cookie(
-        "rules_session",
-        token,
-        httponly=True,
-        secure=config.COOKIE_SECURE,
-        samesite="strict",
-        max_age=43200,
-        path="/",
-    )
-    return {"username": config.ADMIN_USERNAME}
-
-
-@app.get("/api/auth/me")
-def me(admin: Admin):
-    return {"username": config.ADMIN_USERNAME}
-
-
-@app.post("/api/auth/logout")
-def logout(request: Request, response: Response):
-    with connect() as db:
-        db.execute(
-            "DELETE FROM sessions WHERE token_hash = %s",
-            (token_hash(request.cookies.get("rules_session", "")),),
-        )
-    response.delete_cookie("rules_session", path="/")
-    return {"ok": True}
-
-
 GAME_QUERY = """
 SELECT g.*, count(DISTINCT d.id)::int AS document_count,
  count(DISTINCT v.id) FILTER (WHERE v.status IN ('queued','processing'))::int AS processing_count,
@@ -190,13 +112,13 @@ LEFT JOIN versions v ON v.document_id = d.id
 
 
 @app.get("/api/games")
-def games(admin: Admin):
+def games():
     with connect() as db:
         return db.execute(GAME_QUERY + " GROUP BY g.id ORDER BY g.created_at DESC").fetchall()
 
 
 @app.post("/api/games", status_code=201)
-def create_game(body: GameInput, admin: Admin):
+def create_game(body: GameInput):
     with connect() as db:
         return db.execute(
             "INSERT INTO games(id,title,edition,language,description) VALUES (%s,%s,%s,%s,%s) RETURNING *",
@@ -205,7 +127,7 @@ def create_game(body: GameInput, admin: Admin):
 
 
 @app.patch("/api/games/{game_id}")
-def edit_game(game_id: UUID, body: GameInput, admin: Admin):
+def edit_game(game_id: UUID, body: GameInput):
     with connect() as db:
         row = db.execute(
             "UPDATE games SET title=%s,edition=%s,language=%s,description=%s WHERE id=%s RETURNING *",
@@ -224,6 +146,7 @@ def ensure_game(db, game_id):
 DOCUMENT_QUERY = """
 SELECT d.id,d.game_id,d.filename,d.format,d.language,d.size_bytes,d.created_at,
  COALESCE(v.status,'uploaded') AS status,v.id AS version_id,v.stage,v.progress,v.error,
+ COALESCE(v.ai_status,'none') AS ai_status,v.ai_error_code,
  v.page_count,v.character_count,v.processor,v.finished_at,
  (SELECT count(*)::int FROM chunks c WHERE c.version_id=v.id) AS chunk_count,
  (SELECT count(*)::int FROM assets a WHERE a.version_id=v.id) AS asset_count,
@@ -235,7 +158,7 @@ FROM documents d LEFT JOIN LATERAL
 
 
 @app.get("/api/games/{game_id}/documents")
-def documents(game_id: UUID, request: Request, admin: Admin):
+def documents(game_id: UUID, request: Request):
     with connect() as db:
         ensure_game(db, game_id)
         rows = db.execute(
@@ -281,7 +204,6 @@ def save_document(game_id, filename, extension, language, content):
 @app.post("/api/games/{game_id}/documents", status_code=201)
 def upload_document(
     game_id: UUID,
-    admin: Admin,
     file: Annotated[UploadFile, File()],
     language: Annotated[str, Form(pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")] = "en",
 ):
@@ -305,7 +227,7 @@ def upload_document(
 
 
 @app.post("/api/games/{game_id}/documents/text", status_code=201)
-def upload_text(game_id: UUID, body: TextInput, admin: Admin):
+def upload_text(game_id: UUID, body: TextInput):
     filename = Path(body.title.replace("\\", "/")).name
     if not filename.endswith(".md"):
         filename += ".md"
@@ -316,7 +238,7 @@ def upload_text(game_id: UUID, body: TextInput, admin: Admin):
 
 
 @app.post("/api/documents/{document_id}/process", status_code=202)
-def process_document(document_id: UUID, admin: Admin):
+def process_document(document_id: UUID):
     with connect() as db:
         document = db.execute(
             "SELECT id FROM documents WHERE id=%s FOR UPDATE", (document_id,)
@@ -338,8 +260,42 @@ def process_document(document_id: UUID, admin: Admin):
         return {"version_id": version_id, "status": "queued"}
 
 
+@app.post("/api/documents/{document_id}/ai-process", status_code=202)
+def ai_process_document(document_id: UUID):
+    if not config.OPENAI_API_KEY or not config.AI_PROCESSING_ENABLED:
+        raise api_error(409, "ai_not_configured")
+    with connect() as db:
+        if not db.execute(
+            "SELECT id FROM documents WHERE id=%s FOR UPDATE", (document_id,)
+        ).fetchone():
+            raise api_error(404, "document_not_found")
+        if db.execute(
+            "SELECT 1 FROM versions WHERE document_id=%s AND status IN ('queued','processing')",
+            (document_id,),
+        ).fetchone():
+            raise api_error(409, "processing_active")
+        source = db.execute(
+            "SELECT v.id FROM versions v WHERE v.document_id=%s AND v.status IN ('ready','published') "
+            "AND EXISTS(SELECT 1 FROM chunks c WHERE c.version_id=v.id) "
+            "ORDER BY v.created_at DESC,v.id DESC LIMIT 1",
+            (document_id,),
+        ).fetchone()
+        if not source:
+            raise api_error(409, "ai_requires_extraction")
+        version_id = uuid4()
+        db.execute(
+            "INSERT INTO versions(id,document_id,stage) VALUES (%s,%s,'queued')",
+            (version_id, document_id),
+        )
+        db.execute(
+            "INSERT INTO jobs(id,version_id,kind,source_version_id) VALUES (%s,%s,'ai',%s)",
+            (uuid4(), version_id, source["id"]),
+        )
+        return {"version_id": version_id, "status": "queued"}
+
+
 @app.get("/api/versions/{version_id}/preview")
-def preview(version_id: UUID, request: Request, admin: Admin, q: str = "", offset: int = 0):
+def preview(version_id: UUID, request: Request, q: str = "", offset: int = 0):
     if len(q) > 200 or offset < 0:
         raise api_error(400, "invalid_search")
     with connect() as db:
@@ -348,12 +304,12 @@ def preview(version_id: UUID, request: Request, admin: Admin, q: str = "", offse
             raise api_error(404, "version_not_found")
         if q.strip():
             chunks = db.execute(
-                "SELECT id,ordinal,heading,content,page,source_ref FROM chunks WHERE version_id=%s AND search_vector @@ websearch_to_tsquery('simple',%s) ORDER BY ts_rank(search_vector,websearch_to_tsquery('simple',%s)) DESC,ordinal LIMIT 50 OFFSET %s",
+                "SELECT id,ordinal,heading,content,page,source_ref,translation_en,translation_hu FROM chunks WHERE version_id=%s AND search_vector @@ websearch_to_tsquery('simple',%s) ORDER BY ts_rank(search_vector,websearch_to_tsquery('simple',%s)) DESC,ordinal LIMIT 50 OFFSET %s",
                 (version_id, q, q, offset),
             ).fetchall()
         else:
             chunks = db.execute(
-                "SELECT id,ordinal,heading,content,page,source_ref FROM chunks WHERE version_id=%s ORDER BY ordinal LIMIT 50 OFFSET %s",
+                "SELECT id,ordinal,heading,content,page,source_ref,translation_en,translation_hu FROM chunks WHERE version_id=%s ORDER BY ordinal LIMIT 50 OFFSET %s",
                 (version_id, offset),
             ).fetchall()
         assets = db.execute(
@@ -371,7 +327,7 @@ def preview(version_id: UUID, request: Request, admin: Admin, q: str = "", offse
 
 
 @app.post("/api/versions/{version_id}/publish")
-def publish(version_id: UUID, admin: Admin):
+def publish(version_id: UUID):
     with connect() as db:
         row = db.execute("SELECT document_id FROM versions WHERE id=%s", (version_id,)).fetchone()
         if not row:
@@ -393,7 +349,7 @@ def publish(version_id: UUID, admin: Admin):
 
 
 @app.get("/api/documents/{document_id}/source")
-def source(document_id: UUID, admin: Admin):
+def source(document_id: UUID):
     with connect() as db:
         row = db.execute(
             "SELECT source_path,filename FROM documents WHERE id=%s", (document_id,)
@@ -404,7 +360,7 @@ def source(document_id: UUID, admin: Admin):
 
 
 @app.get("/api/assets/{asset_id}")
-def asset(asset_id: UUID, admin: Admin):
+def asset(asset_id: UUID):
     with connect() as db:
         row = db.execute("SELECT path FROM assets WHERE id=%s", (asset_id,)).fetchone()
     if not row:

@@ -6,13 +6,12 @@ from test_admin import add_text, create_game, process
 
 
 def test_error_language_default_selection_and_stable_code(client):
-    client.post("/api/auth/logout")
-    en = client.get("/api/games")
-    hu = client.get("/api/games", headers={"Accept-Language": "hu-HU, en;q=0.5"})
-    assert en.status_code == hu.status_code == 401
-    assert en.json()["code"] == hu.json()["code"] == "auth_required"
-    assert en.json()["detail"] == CATALOGS["en"]["errors.auth_required"]
-    assert hu.json()["detail"] == CATALOGS["hu"]["errors.auth_required"]
+    en = client.get("/api/games/00000000-0000-0000-0000-000000000000/documents")
+    hu = client.get("/api/games/00000000-0000-0000-0000-000000000000/documents", headers={"Accept-Language": "hu-HU, en;q=0.5"})
+    assert en.status_code == hu.status_code == 404
+    assert en.json()["code"] == hu.json()["code"] == "game_not_found"
+    assert en.json()["detail"] == CATALOGS["en"]["errors.game_not_found"]
+    assert hu.json()["detail"] == CATALOGS["hu"]["errors.game_not_found"]
     assert en.headers["content-language"] == "en"
     assert hu.headers["content-language"] == "hu"
 

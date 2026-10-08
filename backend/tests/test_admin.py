@@ -32,10 +32,13 @@ def process(client, document_id):
     return response.json()["version_id"]
 
 
-def test_requires_admin_and_logout_revokes_session(client):
-    assert client.post("/api/auth/logout").status_code == 200
-    assert client.get("/api/games").status_code == 401
-    assert client.post("/api/games", json={"title": "Unauthorized"}).status_code == 401
+def test_admin_read_and_write_without_login(client):
+    assert client.cookies.get("rules_session") is None
+    assert client.get("/api/games").status_code == 200
+    game_id = create_game(client)
+    assert client.get("/api/games").json()[0]["id"] == game_id
+    assert client.get(f"/api/games/{game_id}/documents").status_code == 200
+    assert client.cookies.get("rules_session") is None
 
 
 def test_cross_origin_write_rejected(client):

@@ -49,5 +49,12 @@
   "errors.transcription_failed": "A beszédfelismerés nem elérhető. Próbáld újra, vagy írd be a kérdésedet.",
   "errors.microphone_unavailable": "A mikrofon használatához HTTPS vagy localhost elérés és támogatott böngésző szükséges.",
   "errors.microphone_denied": "A mikrofonengedélyt elutasítottad. Engedélyezd a böngészőben, vagy írd be a kérdésedet.",
-  "errors.recording_failed": "Nem sikerült hangot rögzíteni. Ellenőrizd a mikrofont, vagy írd be a kérdésedet."
+  "errors.recording_failed": "Nem sikerült hangot rögzíteni. Ellenőrizd a mikrofont, vagy írd be a kérdésedet.",
+  "stages.ai_preparing": "Kinyert szabályok előkészítése az AI-hoz",
+  "stages.ai_translating": "Szabályok fordítása és értelmezése",
+  "stages.ai_indexing": "Szemantikus keresési index építése",
+  "errors.ai_not_configured": "Az AI-feldolgozáshoz OPENAI_API_KEY és AI_PROCESSING_ENABLED szükséges.",
+  "errors.ai_requires_extraction": "Először nyerd ki a szabálykönyv szövegét, majd indíts AI-feldolgozást.",
+  "errors.ai_processing_failed": "Az AI-feldolgozás nem teljes. Az eredeti szabályok elérhetők; a fordítás és indexelés befejezéséhez indíts újra AI-feldolgozást.",
+  "errors.ai_processing_limit": "A dokumentum meghaladja az AI-feldolgozás korlátját. Bontsd kisebb szabálykönyvekre, vagy módosítsd a beállított korlátot."
 }

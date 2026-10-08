@@ -15,12 +15,14 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 - Create and edit games, editions, descriptions and rulebook language metadata.
 - Upload PDF, TXT, Markdown, PNG, JPG and WebP files, or paste text directly.
 - Process PDFs and images with Docling and OCR in a separate background worker.
+- With OpenAI configured, translate extracted rules into English and Hungarian and build a multilingual semantic index in PostgreSQL/pgvector. Original text and page references are retained.
+- Apply **AI processing** to an already extracted rulebook without repeating OCR. Review its translations before publishing the replacement.
 - Prefer an available NVIDIA GPU; automatically use CPU when no usable GPU is available, and retry failed GPU conversion once on CPU.
 - Review extracted rule sections with source page numbers, search them by keyword, and inspect original figures.
 - Publish reviewed versions. Reprocessing preserves the previous published version until the replacement is approved.
 - Switch the entire admin interface, dialogs, validation messages, API errors and processing statuses between English and Hungarian. The browser remembers your choice.
 - Keep games, documents and model caches in persistent Docker volumes.
-- Protect admin operations and unpublished material with server-side sessions. Published material is readable without an admin login on the configured local address.
+- Open the player and admin interfaces directly, without signing in. Switch between them using the two items in the top menu. Admin operations are available to everyone who can reach the app on your home network.
 
 ## Walkthrough
 
@@ -34,24 +36,24 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 
 ### Manage the library
 
-1. Open [the admin interface](http://localhost:8080/admin), sign in and choose **New game**. Enter the title, edition, rulebook language and optional description.
+1. Open [the admin interface](http://localhost:8080/admin) and choose **New game**. Enter the title, edition, rulebook language and optional description.
 2. Open the game and choose **Upload rule material**. Select files or use **Paste text**. Markdown headings help organize sections.
 3. Leave **Start processing after upload** enabled, or start processing manually later. Progress and failures appear on each document.
 4. Choose **Review** when processing finishes. Search the extracted text, check source pages, inspect figures and download the original if needed.
 5. Choose **Reviewed — publish** to approve the version. Later, **Reprocess** creates a separate version while the published one remains available.
 
-The language selector is available on the player page, sign-in page, admin header and inside dialogs. Changing interface language does not translate or modify uploaded rulebooks, game names, descriptions or captions. Rulebook language metadata is independent of the interface language.
+The language selector is available in the shared header and inside dialogs. Changing interface language does not translate or modify uploaded rulebooks, game names, descriptions or captions. Rulebook language metadata is independent of the interface language.
 
 Current limits: 50 MB per file by default, 100 pages per document, and a 30-minute processing timeout. Multiple uploaded images currently become separate documents. Source references use actual PDF page positions rather than printed page labels. OCR output still needs human review.
 
-The current retrieval uses prefix keyword search and neighboring sections to include nearby examples and exceptions. With AI enabled, small selected rulebooks (up to 40 chunks and 32,000 content/heading characters) are supplied in full; larger ones use bounded search excerpts. Multilingual semantic retrieval, automatic rulebook translation, exact card/figure associations, PWA installation and conversational follow-ups remain planned. The full-text index is active; pgvector is prepared for later semantic search. Large foreign-language books may need questions using their original terminology. Source identifiers are checked, but answer accuracy still needs evaluation on your real rulebooks.
+Retrieval combines multilingual keyword matches with pgvector cosine similarity and neighboring sections. With AI enabled, small selected rulebooks (up to 40 chunks and 32,000 content/heading characters) are supplied in full; larger books use bounded excerpts. AI translations and topic keywords help retrieval, but explanations cite the original rules only. Exact card/figure associations, PWA installation and conversational follow-ups remain planned. Distant exceptions can still be missed; source identifier checks do not prove that every explanation is correct.
 
 ### Components
 
 | Directory | Purpose |
 | --- | --- |
 | `frontend/` | React, TypeScript and Vite player/admin interfaces; English/Hungarian translation catalogs |
-| `backend/app/` | FastAPI API, authentication, OCR processor and PostgreSQL-backed worker |
+| `backend/app/` | FastAPI API, OCR processor and PostgreSQL-backed worker |
 | `backend/migrations/` | Versioned database migrations |
 | `backend/tests/` | Backend integration and processing checks |
 | `e2e/` | Chromium checks for the admin flow and language switching |
@@ -82,9 +84,11 @@ Linux/Proxmox VM:
 sh infra/start.sh
 ```
 
-The launcher creates `infra/.env` if needed, builds the images and runs a CUDA operation in a temporary container. A successful probe selects `infra/compose.gpu.yaml`; otherwise it starts the CPU configuration. Existing credentials are preserved.
+The launcher creates `infra/.env` if needed, builds the images and runs a CUDA operation in a temporary container. A successful probe selects `infra/compose.gpu.yaml`; otherwise it starts the CPU configuration. Existing configuration is preserved.
 
-Open [http://localhost:8080](http://localhost:8080) for players, or [http://localhost:8080/admin](http://localhost:8080/admin) for administrators. The initial admin username is `admin`. Read the generated password from the `ADMIN_PASSWORD` entry in `infra/.env`. Keep this file private and out of version control.
+Open [http://localhost:8080](http://localhost:8080) for players, or [http://localhost:8080/admin](http://localhost:8080/admin) for administrators. No admin login is required. Use **Questions** and **Admin** in the top menu to switch interfaces. Keep `infra/.env` private and out of version control.
+
+Existing rulebooks: choose **AI processing** on the document, then **Review**. Expand **AI translation** to read the translation in the selected interface language, and publish after checking it. The old published version remains in use until then. New uploads use the AI stage automatically when enabled. The full extracted rule text is sent to OpenAI for translation and embeddings; images remain stored locally. Processing failure keeps usable original material and shows an AI warning.
 
 ### 3. Configuration
 
@@ -94,28 +98,32 @@ Edit `infra/.env` and run the launcher again to apply changes.
 | --- | --- | --- |
 | `APP_BIND_ADDRESS` | `127.0.0.1` | Address exposed on the Docker host |
 | `APP_PORT` | `8080` | Host HTTP port |
-| `ADMIN_USERNAME` | `admin` | Administrator username |
-| `ADMIN_PASSWORD` | Generated | Administrator password; at least 12 characters |
 | `POSTGRES_PASSWORD` | Generated | Database password; preserve it with the database volume |
-| `COOKIE_SECURE` | `false` | Use `true` when serving the application over HTTPS |
 | `MAX_UPLOAD_MB` | `50` | Server upload size limit |
 | `MAX_DOCUMENT_PAGES` | `100` | PDF/image conversion page limit |
 | `PROCESSING_DEVICE` | `auto` | Prefer usable CUDA; `cpu` forces CPU processing |
 | `OPENAI_API_KEY` | Empty | Server-side OpenAI key; empty means local rule search only |
-| `OPENAI_ANSWER_MODEL` | `gpt-4.1-mini` | Responses API model supporting structured outputs |
+| `OPENAI_ANSWER_MODEL` | `gpt-6-luna` | Responses API model supporting structured outputs |
+| `OPENAI_PROCESSING_MODEL` | `gpt-6-luna` | Faithful translation and bilingual search keywords |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Multilingual embedding model; 1536 dimensions |
+| `AI_PROCESSING_ENABLED` | `true` | Translate and index documents when an API key is configured |
+| `AI_MAX_CHUNKS` | `2000` | Maximum rule sections per AI processing job |
+| `AI_MAX_CHARACTERS` | `600000` | Maximum original text characters per AI processing job |
 | `OPENAI_TRANSCRIPTION_MODEL` | `gpt-transcribe` | Audio transcription model |
 
 Interface language is a browser preference, initially English. API clients can send `Accept-Language: en` or `Accept-Language: hu`; errors and document processing messages include stable codes as well as localized text. Unsupported language preferences fall back to English.
 
 #### Enable explanations and voice
 
-Set `OPENAI_API_KEY` locally in `infra/.env`. The setup scripts preserve existing files; add the three OpenAI entries from the table if an older file lacks them. Never put the key in frontend configuration. Recreate only the API to apply this configuration:
+Set `OPENAI_API_KEY` locally in `infra/.env`. The setup scripts preserve existing files; add the OpenAI entries from the table if an older file lacks them. Never put the key in frontend configuration. Recreate the API and worker to apply this configuration. Include `-f infra/compose.gpu.yaml` if your worker uses an NVIDIA GPU:
 
 ```sh
-docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api
+docker compose --env-file infra/.env -f infra/compose.yaml up --build --no-deps -d api worker
 ```
 
-Refresh the player page. The question and selected excerpts are sent to OpenAI for explanations; recordings are sent for transcription. Requests use `store=false` for generated responses. The app saves neither recordings nor question history in the database. Provider data handling still follows your OpenAI account settings. A valid key, model access and internet connection are required; provider failure falls back to literal rule search.
+Refresh the player page. Existing large books need **AI processing** and publication to enable cross-language semantic retrieval. Translation/indexing requests also use your OpenAI account and can incur charges. **AI indexed** means every excerpt has translations and an embedding; **Partial AI index** means only some derived data is available. Limits skip AI processing without discarding extracted rules.
+
+The question and selected excerpts are sent to OpenAI for explanations; recordings are sent for transcription. Requests use `store=false` for generated responses. The app saves neither recordings nor question history in the database. Provider data handling still follows your OpenAI account settings. A valid key, model access and internet connection are required; provider failure falls back to literal rule search.
 
 Question and transcription requests share a limit of 12 per minute per API-visible client address. Behind the bundled proxy, household devices share its address. At most two provider calls run concurrently, with a 45-second timeout and no automatic retry; answer output is limited to 1,800 tokens. These bounds are not a monetary spending cap; configure your provider budget separately.
 
@@ -123,7 +131,7 @@ Microphone capture needs HTTPS or `localhost`, a supported browser and microphon
 
 ### 4. Manual Compose startup
 
-Generate credentials first with `./infra/setup.ps1` or `sh infra/setup.sh` if there is no `.env` yet.
+Generate the database password first with `./infra/setup.ps1` or `sh infra/setup.sh` if there is no `.env` yet.
 
 CPU/container without GPU access:
 
@@ -147,7 +155,7 @@ RapidOCR weights are stored in `/models/docling/rapidocr`. Files are verified ag
 
 Set `APP_BIND_ADDRESS=0.0.0.0`, restart with the launcher, and open `http://<server-ip>:8080` from your phone, tablet or computer. Allow the selected port through the host firewall if required.
 
-The current Compose configuration serves HTTP. For a persistent Proxmox deployment, configure internal DNS and trusted HTTPS: replace the `:80` site address in `infra/Caddyfile` with your internal hostname, enable `tls internal`, expose HTTPS in Compose and persist Caddy's `/data` and `/config` directories. Trust Caddy's root certificate on client devices and set `COOKIE_SECURE=true`. This HTTPS deployment is a separate configuration step; it is not enabled by the default launcher.
+The current Compose configuration serves HTTP. For a persistent Proxmox deployment, configure internal DNS and trusted HTTPS: replace the `:80` site address in `infra/Caddyfile` with your internal hostname, enable `tls internal`, expose HTTPS in Compose and persist Caddy's `/data` and `/config` directories. Trust Caddy's root certificate on client devices. This HTTPS deployment is a separate configuration step; it is not enabled by the default launcher.
 
 ### 6. Status, updates and shutdown
 
@@ -204,15 +212,16 @@ The cleanup helper rejects games without the test prefix. Backend tests remove t
 - **GPU is not selected:** check host drivers and Docker GPU access. The launcher falls back to CPU if its CUDA probe fails. `PROCESSING_DEVICE=cpu` deliberately disables GPU processing.
 - **First OCR job is slow:** models may still be downloading. Check the worker and per-job processing logs. Existing cached models are reused.
 - **A document fails:** verify its format, size, page count and readability, then retry processing. The previous published version remains available.
-- **Sign-in does not work:** check `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `infra/.env`, then restart after any configuration changes.
 - **Mobile cannot connect:** check the bind address, server IP and firewall; `127.0.0.1` allows only host-local access.
 
-The API and PostgreSQL are internal services. Caddy serves the frontend and proxies `/api` on the same origin. `/api/play` exposes only published material for household readers; admin endpoints require authentication. Admin cookies are HttpOnly and last 12 hours; session tokens are hashed in the database. The worker claims durable PostgreSQL jobs with renewable leases and fencing tokens, then commits extracted content and completion state atomically.
+The API and PostgreSQL are internal services. Caddy serves the frontend and proxies `/api` on the same origin. `/api/play` exposes only published material for household readers; admin endpoints allow access without authentication, including writes and unpublished material, for use on a trusted home network. The worker claims durable PostgreSQL jobs with renewable leases and fencing tokens, then commits extracted content and completion state atomically.
 
 ## Reference documentation
 
+- [AI implementation and validation](docs/ai-validation.md)
 - [FastAPI uploads and errors](https://fastapi.tiangolo.com/tutorial/request-files/)
 - [React context](https://react.dev/reference/react/useContext)
+- [OpenAI embeddings](https://developers.openai.com/api/docs/guides/embeddings)
 - [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI file transcription](https://developers.openai.com/api/docs/guides/speech-to-text)
 - [Docling](https://github.com/docling-project/docling)
