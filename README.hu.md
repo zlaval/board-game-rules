@@ -4,7 +4,7 @@
 
 ## Rövid összefoglaló
 
-A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos játékot választ és kérdez a közzétett szabályokról; a válasz mellett eredeti szabályrészletek és forráshivatkozások jelennek meg. Az admin külön felületen gyűjti, feldolgozza, ellenőrzi és közzéteszi a szabályanyagokat. Docker Compose-zal indul, angol és magyar felülettel; az alapértelmezett nyelv az angol.
+A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos játékot választ és kérdez a közzétett szabályokról; a válasz mellett eredeti szabályrészletek és forráshivatkozások jelennek meg. Az admin külön felületen gyűjti és feldolgozza a szabályanyagokat; a sikeresen feldolgozott változatok automatikusan közzétételre kerülnek. Docker Compose-zal indul, angol és magyar felülettel; az alapértelmezett nyelv az angol.
 
 ## Funkciók
 
@@ -17,10 +17,10 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 - PDF-ek és képek feldolgozása Doclinggal és OCR-rel, külön háttérfolyamatban.
 - Terminálszerű feldolgozási napló időbélyegekkel, aktuális lépéssel, eltelt idővel, csomagszámokkal, API-várakozással, modellnevekkel és hibákkal.
 - Beállított OpenAI mellett a kinyert szabályok fordítása a választott használati nyelvekre (angol, magyar vagy mindkettő), többnyelvű szemantikus index PostgreSQL/pgvector alapon. Az eredeti szöveg és forráshely megmarad.
-- **AI-feldolgozás** a már kinyert szabálykönyvön újabb OCR nélkül; ellenőrizhető fordítások az új változat közzététele előtt.
+- **Fordítás és keresés frissítése** a már kinyert szabálykönyvön újabb OCR nélkül; a kész változat automatikusan használható.
 - Elérhető NVIDIA GPU előnyben részesítése; GPU hiányában CPU, GPU-s konverziós hiba után egyszeri CPU-s újrapróbálkozás.
 - Kinyert szabályrészek ellenőrzése forrásoldalakkal, kulcsszavas kereséssel és eredeti ábrákkal.
-- Ellenőrzött változat közzététele. Újrafeldolgozáskor a korábban közzétett változat az új jóváhagyásáig megmarad.
+- Sikeres változatok automatikus közzététele. Újrafeldolgozáskor a korábbi változat az új sikeres elkészültéig megmarad.
 - Választható angol és magyar nyelv az adminfelületen, párbeszédablakokban, ellenőrző üzenetekben, API-hibákban és feldolgozási állapotokban. A böngésző megjegyzi a választást.
 - Tartós adatbázis-, dokumentum- és modellvolume-ok.
 - Belépés nélkül elérhető kérdező- és adminfelület, két felső menüponttal. Az adminműveleteket mindenki eléri, aki az otthoni hálózaton hozzáfér az alkalmazáshoz.
@@ -40,8 +40,8 @@ A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos
 1. Nyisd meg az [adminfelületet](http://localhost:8080/admin), és válaszd az **Új játék** gombot. Add meg a címet, kiadást, a szabálykönyv nyelvét és az opcionális leírást.
 2. Nyisd meg a játékot, majd válaszd a **Szabályanyag feltöltése** gombot. Válassz fájlokat vagy a **Szöveg beillesztése** lehetőséget. A Markdown-címek segítik a tagolást.
 3. Válaszd ki a **Szabálykönyv nyelve** és **Használat nyelve** mezőket. Egyező nyelveknél kimarad a fordítás. Hagyd bekapcsolva a **Feldolgozás indítása a feltöltés után** lehetőséget, vagy indítsd el később kézzel. A játékoldal alján a **Feldolgozási napló** mutatja a részleteket.
-4. A feldolgozás végén nyisd meg az **Ellenőrzés** nézetet. Keress a szövegben, ellenőrizd a forrásoldalakat és ábrákat; szükség esetén töltsd le az eredetit.
-5. Az **Ellenőriztem, közzéteszem** gombbal hagyd jóvá a változatot. Az **Újrafeldolgozás** új változatot készít, a korábbi közzétett továbbra is elérhető.
+4. Sikeres feldolgozás után a szabályok automatikusan elérhetők. A **Szabályok megtekintése** gombbal kereshetsz a kinyert szövegben és megnézheted az ábrákat; az **Eredeti letöltése** megnyitja a forrásfájlt.
+5. Az **Újrafeldolgozás** ismét beolvassa a fájlt; a **Fordítás és keresés frissítése** csak a fordításokat és a bővített keresést frissíti. A korábbi változat az új sikeres elkészültéig elérhető marad. A nem használható műveletek le vannak tiltva.
 
 A nyelvválasztó a közös fejlécben és a párbeszédablakokban is elérhető. A felület nyelvének megváltoztatása nem fordítja le és nem módosítja a feltöltött szabálykönyveket, játékneveket, leírásokat vagy képaláírásokat. A szabálykönyv nyelve külön adat.
 
@@ -67,6 +67,8 @@ A keresés többnyelvű kulcsszavas találatokat és pgvector-alapú szemantikus
 
 Minden parancsot a projekt gyökerében futtass. Docker, Compose plugin és Linux konténerek szükségesek. Windowson Docker Desktop WSL2 backenddel; Proxmoxon egy Linux virtuális gépben futó Docker használható.
 
+Az otthoni Proxmox VM telepítését és karbantartását a [külön útmutató](infra/proxmox/README.hu.md) írja le. A CPU-indító a nem használt CUDA-függőségek nélkül épít.
+
 GPU nélkül is működik az alkalmazás. NVIDIA-gyorsításhoz támogatott driver és Dockerből elérhető GPU szükséges. Linuxon NVIDIA Container Toolkit is kell; Proxmox virtuális gépben GPU passthrough-t is be kell állítani. A mellékelt image NVIDIA CUDA-t támogat, AMD/Intel GPU-runtime-ot nem tartalmaz. Működő CUDA nélkül CPU-ra vált.
 
 Az első build több GB CUDA- és dokumentumfeldolgozó függőséget tölt le. Az első PDF-/képfeldolgozás további modelleket is letölthet, ezért internetet igényel. A modellek a következő futtatásokhoz megmaradnak. Az egyszerű szöveg feldolgozásához nincs szükség OCR-modellekre.
@@ -87,9 +89,9 @@ sh infra/start.sh
 
 Az indító szükség esetén létrehozza az `infra/.env` fájlt, felépíti az image-eket, és ideiglenes konténerben CUDA-műveletet futtat. Sikeres próba esetén az `infra/compose.gpu.yaml` kiegészítővel indul; egyébként CPU-s konfigurációt választ. A meglévő beállítások megmaradnak.
 
-A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. Az admin nem kér belépést. A felső **Kérdezés** és **Admin** menüponttal válthatsz a felületek között. Az `infra/.env` fájlt kezeld titokként, és ne tedd verziókezelésbe.
+A [http://localhost:8080](http://localhost:8080) címen a kérdezőfelület, a [http://localhost:8080/admin](http://localhost:8080/admin) címen az admin érhető el. Az admin nem kér belépést. A felső **Szabály keresése** és **Szabálykönyv feldolgozása** menüponttal válthatsz a felületek között. Az `infra/.env` fájlt kezeld titokként, és ne tedd verziókezelésbe.
 
-Meglévő szabálykönyvnél válaszd a dokumentum **AI-feldolgozás**, majd **Ellenőrzés** gombját. Az **AI-fordítás** részben a felület nyelvén olvashatod a fordítást; ellenőrzés után tedd közzé. Addig a korábbi közzétett változat marad használatban. Új feltöltésnél az AI-szakasz automatikusan fut, ha engedélyezett. Feltöltéskor válaszd ki a **Szabálykönyv nyelve** és **Használat nyelve** mezőket (angol, magyar vagy mindkettő). Fordítás csak a forrásétól eltérő, kiválasztott nyelvekre készül: magyar → magyar esetén teljesen kimarad; angol → magyar esetén csak magyar fordítás készül. Az eredeti szöveg feldolgozása és indexelése továbbra is lefut. A választást a dokumentumhoz mentjük, és újrafeldolgozáskor is használjuk. A korábbi dokumentumok megtartják az eddigi két nyelvű beállítást. A szövegrészletek indexelésre és a szükséges fordításra az OpenAI-hoz kerülnek; a képek helyben maradnak. AI-hiba esetén az eredeti szöveg megmarad, a felület figyelmeztet.
+Meglévő szabálykönyvnél válaszd a dokumentum **Fordítás és keresés frissítése**, majd **Szabályok megtekintése** gombját. Az **AI-fordítás** részben a felület nyelvén olvashatod a fordítást. A sikeresen elkészült új változat automatikusan közzétételre kerül; addig a korábbi változat marad használatban. Új feltöltésnél az AI-szakasz automatikusan fut, ha engedélyezett. Feltöltéskor válaszd ki a **Szabálykönyv nyelve** és **Használat nyelve** mezőket (angol, magyar vagy mindkettő). Fordítás csak a forrásétól eltérő, kiválasztott nyelvekre készül: magyar → magyar esetén teljesen kimarad; angol → magyar esetén csak magyar fordítás készül. Az eredeti szöveg feldolgozása és indexelése továbbra is lefut. A választást a dokumentumhoz mentjük, és újrafeldolgozáskor is használjuk. A korábbi dokumentumok megtartják az eddigi két nyelvű beállítást. A szövegrészletek indexelésre és a szükséges fordításra az OpenAI-hoz kerülnek; a képek helyben maradnak. AI-hiba esetén az eredeti szöveg megmarad, a felület figyelmeztet.
 
 A feldolgozási napló két másodpercenként frissül. Az öt legutóbbi feladat közül választhatsz; a **Napló követése** a legújabb eseményekhez görget. Legfeljebb 250 esemény látszik, köztük a kinyerés, fordítás és indexelés időmérései. API-hívás közben az aktuális lépés eltelt ideje is megjelenik. Az események a feldolgozott változat fájljaival együtt maradnak meg azok törléséig. Nyers API-kimenet és dokumentumszöveg nem kerül ebbe a naplóba.
 

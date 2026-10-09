@@ -39,12 +39,11 @@ async function fixture(name, text, publish = true) {
   let ready = false
   for (let attempt = 0; attempt < 60; attempt++) {
     const documents = await api(`/games/${game.id}/documents`)
-    if (documents[0].status === 'ready') { ready = true; break }
+    if (documents[0].status === 'published') { ready = true; break }
     assert.notEqual(documents[0].status, 'failed')
     await new Promise(resolve => setTimeout(resolve, 500))
   }
   assert.ok(ready, 'Worker did not process the reader fixture')
-  await api(`/versions/${version.version_id}/publish`, {})
   return { game, doc, version: version.version_id, preview: await api(`/versions/${version.version_id}/preview`) }
 }
 async function language(value) {
@@ -69,9 +68,9 @@ try {
     } }))
   }
   await page.goto(uiBase)
-  await page.getByRole('heading', { name: 'Ask the rules', exact: true }).waitFor()
+  await page.getByRole('navigation').getByRole('link', { name: 'Rule search', exact: true }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'en')
-  await page.getByRole('button', { name: `${title} 2026`, exact: true }).click()
+  await page.getByRole('button', { name: title, exact: true }).click()
   await page.getByLabel('Your question', { exact: true }).waitFor()
   assert.equal(await page.getByText(draft.game.title, { exact: true }).count(), 0)
   assert.equal(await page.getByRole('button', { name: 'Use microphone' }).isDisabled(), true)
@@ -159,7 +158,7 @@ try {
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal(await page.getByLabel('Your question', { exact: true }).inputValue(), 'My edited question')
   assert.equal(transcriptionUploads, 1)
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
+  await page.getByRole('link', { name: 'Process rulebooks', exact: true }).click()
   await page.getByRole('heading', { name: 'Game collection' }).waitFor()
   assert.deepEqual(errors, [])
   console.log('PASS: public reader, published-game isolation, literal search/no-match states, source/original links, rulebook selection, language switching, game reset/deep link, desktop/mobile/tablet, cited answer UI, real MediaRecorder with mocked transcription, cancellation, shared top navigation; no JavaScript errors. No real OpenAI requests made.')

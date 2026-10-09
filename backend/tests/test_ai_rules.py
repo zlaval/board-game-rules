@@ -176,7 +176,6 @@ def test_ai_reprocessing_reuses_extraction_and_preserves_published_version(clien
         },
     ).json()["id"]
     old = process(client, doc)
-    client.post(f"/api/versions/{old}/publish")
     old_asset = uuid4()
     path = f"test-ai/{old_asset}.png"
     storage_path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -195,6 +194,7 @@ def test_ai_reprocessing_reuses_extraction_and_preserves_published_version(clien
     assert client.post(f"/api/documents/{doc}/ai-process").status_code == 409
     job = claim()
     assert job["kind"] == "ai" and str(job["source_version_id"]) == old
+    assert client.get(f"/api/play/games/{game}/documents").json()[0]["version_id"] == old
     output = storage_path("test-ai-copy")
     output.mkdir(parents=True, exist_ok=True)
     data = enrichment.copy_extracted(old, output)
@@ -205,11 +205,10 @@ def test_ai_reprocessing_reuses_extraction_and_preserves_published_version(clien
     assert data["assets"][0]["id"] != str(old_asset)
     assert complete(job, data, "test-ai-copy")
     document = client.get(f"/api/games/{game}/documents").json()[0]
-    assert document["ai_status"] == "complete" and document["published_version_id"] == old
+    assert document["ai_status"] == "complete" and document["published_version_id"] == new
     preview = client.get(f"/api/versions/{new}/preview", params={"q": "futár"}).json()
     assert preview["chunks"][0]["content"].startswith("After an attack")
     assert "futár" in preview["chunks"][0]["translation_hu"]
-    assert client.post(f"/api/versions/{new}/publish").status_code == 200
     assert (
         client.get(f"/api/play/games/{game}/assets/{data['assets'][0]['id']}").content
         == b"original figure"

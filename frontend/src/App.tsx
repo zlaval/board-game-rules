@@ -24,6 +24,10 @@ type IconName =
   | "edit"
   | "image"
   | "refresh"
+  | "eye"
+  | "sparkles"
+  | "download"
+  | "play"
   | "lock";
 const paths: Record<IconName, ReactNode> = {
   books: (
@@ -80,6 +84,19 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3" />
     </>
   ),
+  eye: (
+    <>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  sparkles: (
+    <>
+      <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3ZM20 2v4m-2-2h4" />
+    </>
+  ),
+  download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />,
+  play: <path d="m8 4 12 8-12 8V4Z" />,
 };
 export function Icon({
   name,
@@ -574,11 +591,9 @@ function UploadForm({
 function PreviewModal({
   document,
   onClose,
-  onPublished,
 }: {
   document: Document;
   onClose: () => void;
-  onPublished: () => void;
 }) {
   const { t, language } = useI18n();
   const [data, setData] = useState<Preview | null>(null);
@@ -586,7 +601,6 @@ function PreviewModal({
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
@@ -605,18 +619,6 @@ function PreviewModal({
       });
     return () => controller.abort();
   }, [document.version_id, search, offset]);
-  async function publish() {
-    setBusy(true);
-    setError("");
-    try {
-      await api(`/versions/${document.version_id}/publish`, { method: "POST" });
-      onPublished();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <Modal title={t("Processed rule material")} onClose={onClose} wide>
       <div className="preview-title">
@@ -761,16 +763,6 @@ function PreviewModal({
           <Icon name="file" />
           {t("Download original")}
         </a>
-        {document.status === "ready" && (
-          <button
-            className="button primary"
-            onClick={publish}
-            disabled={busy || loading}
-          >
-            <Icon name="check" />
-            {busy ? t("Publishing…") : t("Reviewed — publish")}
-          </button>
-        )}
       </footer>
     </Modal>
   );
@@ -884,23 +876,24 @@ export default function App() {
               <h1>{game ? game.title : t("Game collection")}</h1>
               {game?.edition && <p>{game.edition}</p>}
             </div>
-            <button className="button primary" onClick={() => setForm("new")}>
-              <Icon name="plus" />
-              {t("New game")}
-            </button>
-          </div>
-          {ai && (
-            <p className="admin-ai-status">
-              <Icon name={ai.explanations ? "check" : "file"} />
-              {t(
-                ai.processing
-                  ? "AI processing and explanations enabled"
-                  : ai.explanations
-                    ? "AI explanations enabled"
-                    : "AI unavailable · Set OPENAI_API_KEY in infra/.env",
+            <div className="page-heading-actions">
+              {!game && (
+                <div className="search-field">
+                  <Icon name="search" />
+                  <input
+                    placeholder={t("Search games…")}
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    aria-label={t("Search games")}
+                  />
+                </div>
               )}
-            </p>
-          )}
+              <button className="button primary" onClick={() => setForm("new")}>
+                <Icon name="plus" />
+                {t("New game")}
+              </button>
+            </div>
+          </div>
           {!!error && (
             <div className="error global-error" role="alert">
               {errorMessage(error, t)}
@@ -919,15 +912,6 @@ export default function App() {
                 <span className="collection-count">
                   {t("{count} game(s)", { count: games.length })}
                 </span>
-                <div className="search-field">
-                  <Icon name="search" />
-                  <input
-                    placeholder={t("Search games…")}
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    aria-label={t("Search games")}
-                  />
-                </div>
               </div>
               {loading && !games.length ? (
                 <p className="loading">{t("Loading collection…")}</p>
@@ -1003,15 +987,6 @@ export default function App() {
                   {t("Edit details")}
                 </button>
               </div>
-              <section className="game-info">
-                <div>
-                  {game.description && <p>{game.description}</p>}
-                  <span className="metadata">
-                    {t(languageName[game.language] ?? game.language)} ·{" "}
-                    {game.edition || t("Edition not specified")}
-                  </span>
-                </div>
-              </section>
               <div className="collection-toolbar">
                 <h2>
                   {t("Rule material")}
@@ -1044,166 +1019,184 @@ export default function App() {
                 </section>
               ) : (
                 <div className="documents">
-                  {documents.map((doc) => (
-                    <article className="document-card" key={doc.id}>
-                      <div className="document-icon">
-                        <Icon
-                          name={
-                            ["png", "jpg", "jpeg", "webp"].includes(doc.format)
-                              ? "image"
-                              : "file"
-                          }
-                        />
-                        <small>{doc.format.toUpperCase()}</small>
-                      </div>
-                      <div className="document-main">
-                        <div className="document-title">
-                          <h3>{doc.filename}</h3>
-                          <Badge status={doc.status} />
-                          <span className="badge">
-                            {t(`ai.${doc.ai_status}`)}
-                          </span>
+                  {documents.map((doc) => {
+                    const processing = ["queued", "processing"].includes(
+                      doc.status,
+                    );
+                    const availableVersion = ["ready", "published"].includes(
+                      doc.status,
+                    )
+                      ? doc.version_id
+                      : doc.published_version_id;
+                    const canProcess = !processing && pending === null;
+                    const canEnrich =
+                      canProcess &&
+                      !!ai?.processing &&
+                      !!availableVersion &&
+                      (doc.chunk_count > 0 || !!doc.published_version_id);
+                    return (
+                      <article className="document-card" key={doc.id}>
+                        <div className="document-icon">
+                          <Icon
+                            name={
+                              ["png", "jpg", "jpeg", "webp"].includes(
+                                doc.format,
+                              )
+                                ? "image"
+                                : "file"
+                            }
+                          />
+                          <small>{doc.format.toUpperCase()}</small>
                         </div>
-                        <p className="document-meta">
-                          {t(languageName[doc.language] ?? doc.language)} ·{" "}
-                          {t("Use: {language}", {
-                            language:
-                              doc.usage_language === "both"
-                                ? t("English and Hungarian")
-                                : t(
-                                    languageName[doc.usage_language] ??
-                                      doc.usage_language,
-                                  ),
-                          })}{" "}
-                          · {fileSize(doc.size_bytes)}
-                          {doc.chunk_count
-                            ? ` · ${t("{count} rule section(s)", { count: doc.chunk_count })}`
-                            : ""}
-                          {doc.page_count
-                            ? ` · ${t("{count} page(s)", { count: doc.page_count })}`
-                            : ""}
-                          {doc.asset_count
-                            ? ` · ${t("{count} figure(s)", { count: doc.asset_count })}`
-                            : ""}
-                        </p>
-                        {["processing", "queued"].includes(doc.status) && (
-                          <div className="processing">
-                            <div className="progress-track">
-                              <div
-                                className={`progress-fill ${doc.status === "queued" ? "queued" : ""}`}
-                                style={{ width: `${doc.progress ?? 0}%` }}
-                              />
-                            </div>
-                            <span>
-                              {doc.stage_code
-                                ? t(`stages.${doc.stage_code}`)
-                                : t("stages.processing")}
-                              {doc.stage_params?.device
-                                ? ` (${doc.stage_params.device})`
-                                : ""}{" "}
-                              · {doc.progress ?? 0}%
-                            </span>
+                        <div className="document-main">
+                          <div className="document-title">
+                            <h3>{doc.filename}</h3>
+                            <Badge status={doc.status} />
+                            {doc.chunk_count > 0 && (
+                              <span className="badge">
+                                {t(`ai.${doc.ai_status}`)}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {doc.error && (
-                          <p className="document-error">
-                            {t(
-                              `errors.${doc.error_code ?? "processing_failed"}`,
-                            )}
+                          <p className="document-meta">
+                            {t(languageName[doc.language] ?? doc.language)} ·{" "}
+                            {t("Use: {language}", {
+                              language:
+                                doc.usage_language === "both"
+                                  ? t("English and Hungarian")
+                                  : t(
+                                      languageName[doc.usage_language] ??
+                                        doc.usage_language,
+                                    ),
+                            })}{" "}
+                            · {fileSize(doc.size_bytes)}
+                            {doc.chunk_count
+                              ? ` · ${t("{count} rule section(s)", { count: doc.chunk_count })}`
+                              : ""}
+                            {doc.page_count
+                              ? ` · ${t("{count} page(s)", { count: doc.page_count })}`
+                              : ""}
+                            {doc.asset_count
+                              ? ` · ${t("{count} figure(s)", { count: doc.asset_count })}`
+                              : ""}
                           </p>
-                        )}
-                        {doc.ai_error_code && (
-                          <p className="ai-warning">
-                            {t(`errors.${doc.ai_error_code}`)}
-                          </p>
-                        )}
-                        {doc.has_published && doc.status !== "published" && (
-                          <p className="field-note">
-                            {t(
-                              "The previously published version remains available.",
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <div className="document-actions">
-                        {ai?.processing &&
-                          !["queued", "processing", "uploaded"].includes(
-                            doc.status,
-                          ) &&
-                          doc.version_id && (
-                            <button
-                              className="button secondary"
-                              disabled={pending === doc.id}
-                              title={t(
-                                "Translate and index extracted rules without OCR",
+                          {["processing", "queued"].includes(doc.status) && (
+                            <div className="processing">
+                              <div className="progress-track">
+                                <div
+                                  className={`progress-fill ${doc.status === "queued" ? "queued" : ""}`}
+                                  style={{ width: `${doc.progress ?? 0}%` }}
+                                />
+                              </div>
+                              <span>
+                                {doc.stage_code
+                                  ? t(`stages.${doc.stage_code}`)
+                                  : t("stages.processing")}
+                                {doc.stage_params?.device
+                                  ? ` (${doc.stage_params.device})`
+                                  : ""}{" "}
+                                · {doc.progress ?? 0}%
+                              </span>
+                            </div>
+                          )}
+                          {doc.error && (
+                            <p className="document-error">
+                              {t(
+                                `errors.${doc.error_code ?? "processing_failed"}`,
                               )}
-                              onClick={() => void processDocument(doc, true)}
-                            >
-                              <Icon name="refresh" />
-                              {t("AI processing")}
-                            </button>
+                            </p>
                           )}
-                        {doc.published_version_id &&
-                          doc.status !== "published" && (
-                            <button
-                              className="button secondary"
-                              onClick={() =>
-                                setPreview({
-                                  ...doc,
-                                  version_id: doc.published_version_id,
-                                  status: "published",
-                                })
-                              }
-                            >
-                              {t("Published version")}
-                            </button>
+                          {doc.ai_error_code && (
+                            <p className="ai-warning">
+                              {t(`errors.${doc.ai_error_code}`)}
+                            </p>
                           )}
-                        {["ready", "published"].includes(doc.status) && (
+                          {doc.has_published && doc.status !== "published" && (
+                            <p className="field-note">
+                              {t(
+                                "The previously published version remains available.",
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <div className="document-actions">
                           <button
                             className="button secondary"
-                            onClick={() => setPreview(doc)}
+                            disabled={!availableVersion}
+                            title={t(
+                              availableVersion
+                                ? "View extracted text and figures"
+                                : "Available after successful processing",
+                            )}
+                            onClick={() =>
+                              setPreview({
+                                ...doc,
+                                version_id: availableVersion,
+                                status:
+                                  availableVersion === doc.published_version_id
+                                    ? "published"
+                                    : doc.status,
+                              })
+                            }
                           >
-                            {t("Review")}
-                            <Icon name="arrow" />
+                            <Icon name="eye" />
+                            {t("View rules")}
                           </button>
-                        )}
-                        {!["queued", "processing"].includes(doc.status) && (
                           <button
-                            className={`button ${doc.status === "uploaded" || doc.status === "failed" ? "primary" : "ghost"}`}
-                            disabled={pending === doc.id}
+                            className="button secondary"
+                            disabled={!canProcess}
+                            title={t(
+                              processing
+                                ? "Processing is already running"
+                                : "Extract text and figures, then make the rules available automatically",
+                            )}
                             onClick={() => void processDocument(doc)}
                           >
                             <Icon
                               name={
-                                doc.status === "uploaded" ? "arrow" : "refresh"
+                                doc.status === "uploaded" ? "play" : "refresh"
                               }
                             />
                             {pending === doc.id
                               ? t("Starting…")
-                              : doc.status === "uploaded"
-                                ? t("Process")
-                                : t("Reprocess")}
+                              : t(
+                                  doc.status === "uploaded"
+                                    ? "Process"
+                                    : doc.status === "failed"
+                                      ? "Retry processing"
+                                      : "Reprocess",
+                                )}
                           </button>
-                        )}
-                        <a
-                          className="text-button"
-                          href={`/api/documents/${doc.id}/source`}
-                        >
-                          {t("Download original")}
-                        </a>
-                      </div>
-                    </article>
-                  ))}
+                          <button
+                            className="button secondary"
+                            disabled={!canEnrich}
+                            title={t(
+                              processing
+                                ? "Processing is already running"
+                                : !ai?.processing
+                                  ? "Translation and enhanced search are unavailable"
+                                  : !availableVersion
+                                    ? "Available after successful processing"
+                                    : "Update translations and enhanced search without extracting the file again",
+                            )}
+                            onClick={() => void processDocument(doc, true)}
+                          >
+                            <Icon name="sparkles" />
+                            {t("Update translation and search")}
+                          </button>
+                          <a
+                            className="button secondary"
+                            href={`/api/documents/${doc.id}/source`}
+                          >
+                            <Icon name="download" />
+                            {t("Download original")}
+                          </a>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
-              <div className="info-note">
-                <Icon name="check" />
-                <p>
-                  {t(
-                    "Review the extracted text and figures first, then publish the approved version.",
-                  )}
-                </p>
-              </div>
               <ProcessingLog gameId={game.id} />
             </>
           )}
@@ -1242,15 +1235,7 @@ export default function App() {
         />
       )}
       {preview && (
-        <PreviewModal
-          document={preview}
-          onClose={() => setPreview(null)}
-          onPublished={() => {
-            setPreview(null);
-            refresh();
-            setNotice("Rule material published.");
-          }}
-        />
+        <PreviewModal document={preview} onClose={() => setPreview(null)} />
       )}
     </div>
   );

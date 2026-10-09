@@ -30,7 +30,7 @@ def test_completed_text_job_has_durable_localized_processing_log(client):
     result = client.get(f"/api/games/{game}/processing", headers={"Accept-Language": "hu"}).json()
     job = result["jobs"][0]
     assert job["version_id"] == version and job["state"] == "done" and job["progress"] == 100
-    assert job["stage"] == "Ellenőrzésre kész"
+    assert job["stage"] == "Feldolgozás kész"
     codes = {e["code"] for e in job["events"]}
     assert {
         "job_started",

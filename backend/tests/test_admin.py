@@ -1,9 +1,10 @@
 from uuid import UUID
+from pathlib import Path
 
 from app.db import connect
 from app.processing import extract_text, split_text
 from app.storage import storage_path
-from app.worker import claim, complete, run_job
+from app.worker import claim, complete, fail, run_job
 
 RULES = "# Előkészületek\n\nMinden játékos három kártyát kap.\n\n# Körök\n\nEgy körben két akció hajtható végre. Támadás után nem mozoghatsz.\n\n# Kivétel\n\nA futár támadás után is mozoghat."
 
@@ -56,18 +57,18 @@ def test_game_validation_and_edit(client):
     assert client.get("/api/games").json()[0]["title"] == "Új név"
 
 
-def test_text_to_search_preview_and_publish(client):
+def test_text_to_search_preview_and_automatic_publication(client):
     game_id = create_game(client)
     document_id = add_text(client, game_id)
     version_id = process(client, document_id)
     docs = client.get(f"/api/games/{game_id}/documents").json()
-    assert docs[0]["status"] == "ready"
+    assert docs[0]["status"] == "published"
     assert docs[0]["chunk_count"] >= 3
     preview = client.get(f"/api/versions/{version_id}/preview", params={"q": "futár"}).json()
     assert len(preview["chunks"]) == 1
     assert "támadás után is mozoghat" in preview["chunks"][0]["content"]
     assert preview["chunks"][0]["heading"] == "Kivétel"
-    assert client.post(f"/api/versions/{version_id}/publish").status_code == 200
+    assert client.get(f"/api/play/games/{game_id}/documents").json()[0]["version_id"] == version_id
     assert client.get(f"/api/games/{game_id}/documents").json()[0]["status"] == "published"
 
 
@@ -75,13 +76,13 @@ def test_reprocessing_keeps_published_version_until_atomic_swap(client):
     game_id = create_game(client)
     document_id = add_text(client, game_id)
     first = process(client, document_id)
-    client.post(f"/api/versions/{first}/publish")
-    second = process(client, document_id)
+    second = client.post(f"/api/documents/{document_id}/process").json()["version_id"]
     doc = client.get(f"/api/games/{game_id}/documents").json()[0]
-    assert doc["status"] == "ready" and doc["has_published"] is True
+    assert doc["status"] == "queued" and doc["has_published"] is True
     assert doc["published_version_id"] == first
     assert client.get(f"/api/versions/{first}/preview").json()["version"]["status"] == "published"
-    client.post(f"/api/versions/{second}/publish")
+    run_job(claim())
+    assert client.get(f"/api/games/{game_id}/documents").json()[0]["published_version_id"] == second
     assert client.get(f"/api/versions/{first}/preview").json()["version"]["status"] == "ready"
     assert client.get(f"/api/versions/{second}/preview").json()["version"]["status"] == "published"
 
@@ -152,7 +153,37 @@ def test_expired_lease_recovery_and_stale_worker_fencing(client):
     assert replacement["token"] != first["token"]
     assert complete(first, {}, "irrelevant") is False
     run_job(replacement)
-    assert client.get(f"/api/versions/{version}/preview").json()["version"]["status"] == "ready"
+    assert client.get(f"/api/versions/{version}/preview").json()["version"]["status"] == "published"
+
+
+def test_failed_reprocessing_keeps_previous_rules_available(client):
+    game = create_game(client)
+    doc = add_text(client, game)
+    first = process(client, doc)
+    client.post(f"/api/documents/{doc}/process")
+    fail(claim(), "processing_failed")
+    current = client.get(f"/api/games/{game}/documents").json()[0]
+    assert current["status"] == "failed" and current["published_version_id"] == first
+    assert client.get(f"/api/play/games/{game}/documents").json()[0]["version_id"] == first
+
+
+def test_automatic_publication_migration_uses_latest_successful_version(client):
+    game = create_game(client)
+    doc = add_text(client, game)
+    first = process(client, doc)
+    second = process(client, doc)
+    client.post(f"/api/documents/{doc}/process")
+    fail(claim(), "processing_failed")
+    with connect() as db:
+        # Reproduce a library awaiting manual approval from the previous workflow.
+        db.execute("UPDATE versions SET status='ready',published_at=NULL WHERE id=%s", (second,))
+        db.execute("UPDATE versions SET status='published',published_at=now() WHERE id=%s", (first,))
+        migration = Path(__file__).parent.parent / "migrations/004_automatic_publication.sql"
+        db.execute(migration.read_text(encoding="utf-8"))
+    current = client.get(f"/api/games/{game}/documents").json()[0]
+    assert current["status"] == "failed" and current["published_version_id"] == second
+    assert client.get(f"/api/versions/{first}/preview").json()["version"]["status"] == "ready"
+    assert client.get(f"/api/play/games/{game}/documents").json()[0]["version_id"] == second
 
 
 def test_failure_is_visible_and_can_retry(client):

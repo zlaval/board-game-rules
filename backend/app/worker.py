@@ -86,6 +86,11 @@ def complete(job, manifest, relative_output):
         if not owned:
             return False
         version = job["version_id"]
+        # Serialize the version swap with processing and publication for this document.
+        document = db.execute(
+            "SELECT document_id FROM versions WHERE id=%s", (version,)
+        ).fetchone()
+        db.execute("SELECT id FROM documents WHERE id=%s FOR UPDATE", (document["document_id"],))
         with db.cursor() as cursor:
             cursor.executemany(
                 "INSERT INTO chunks(id,version_id,ordinal,heading,content,page,source_ref,provenance,translation_en,translation_hu,ai_keywords,embedding,embedding_model) "
@@ -125,7 +130,12 @@ def complete(job, manifest, relative_output):
                 ],
             )
         db.execute(
-            "UPDATE versions SET status='ready',stage='ready',progress=100,page_count=%s,character_count=%s,processor=%s,ai_status=%s,ai_model=%s,ai_error_code=%s,finished_at=now() WHERE id=%s",
+            "UPDATE versions SET status='ready',published_at=NULL "
+            "WHERE document_id=%s AND status='published' AND id<>%s",
+            (document["document_id"], version),
+        )
+        db.execute(
+            "UPDATE versions SET status='published',published_at=now(),stage='ready',progress=100,page_count=%s,character_count=%s,processor=%s,ai_status=%s,ai_model=%s,ai_error_code=%s,finished_at=now() WHERE id=%s",
             (
                 manifest["page_count"],
                 manifest["character_count"],

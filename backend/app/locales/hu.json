@@ -32,7 +32,7 @@
   "stages.loading_ocr": "OCR és dokumentummodellek betöltése",
   "stages.extracting_sections": "Szabályrészek és forráshelyek kinyerése",
   "stages.preparing_search": "Keresési adatok előkészítése",
-  "stages.ready": "Ellenőrzésre kész",
+  "stages.ready": "Feldolgozás kész",
   "stages.failed": "Sikertelen feldolgozás",
   "stages.interrupted": "Megszakadt feldolgozás",
   "errors.question_rate_limit": "Túl sok kérdés érkezett. Várj egy percet, majd próbáld újra.",

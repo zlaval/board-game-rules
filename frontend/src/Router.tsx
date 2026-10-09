@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import Admin from "./App";
+import Admin, { Icon } from "./App";
 import Player from "./Player";
 import { LanguageSwitcher, useI18n } from "./i18n";
 
@@ -7,7 +7,7 @@ export default function Router() {
   const { language, t } = useI18n();
   const admin = /^\/admin\/?$/.test(window.location.pathname);
   useEffect(() => {
-    document.title = `${t("RuleShelf")} · ${admin ? t("Admin") : t("Ask the rules")}`;
+    document.title = `${t("RuleShelf")} · ${admin ? t("Process rulebooks") : t("Rule search")}`;
   }, [language, t, admin]);
   return (
     <>
@@ -27,10 +27,12 @@ export default function Router() {
         </a>
         <nav className="app-navigation" aria-label={t("Main navigation")}>
           <a href="/" aria-current={!admin ? "page" : undefined}>
-            {t("Questions")}
+            <Icon name="search" />
+            <span>{t("Rule search")}</span>
           </a>
           <a href="/admin" aria-current={admin ? "page" : undefined}>
-            {t("Admin")}
+            <Icon name="upload" />
+            <span>{t("Process rulebooks")}</span>
           </a>
         </nav>
         <LanguageSwitcher />

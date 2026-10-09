@@ -16,13 +16,13 @@ try {
  assert.equal((await context.cookies()).some(c=>c.name==='rules_session'),false);
  let nav=page.getByRole('navigation',{name:'Main navigation'});
  assert.equal(await nav.getByRole('link').count(),2);
- assert.equal(await nav.getByRole('link',{name:'Admin',exact:true}).getAttribute('aria-current'),'page');
+ assert.equal(await nav.getByRole('link',{name:'Process rulebooks',exact:true}).getAttribute('aria-current'),'page');
  await shot('admin-desktop');
- await nav.getByRole('link',{name:'Questions',exact:true}).click();
- await page.getByRole('heading',{name:'Ask the rules',exact:true}).waitFor();
- assert.equal(await page.getByRole('navigation').getByRole('link',{name:'Questions',exact:true}).getAttribute('aria-current'),'page');
+ await nav.getByRole('link',{name:'Rule search',exact:true}).click();
+ await page.getByRole('region',{name:'Rule questions',exact:true}).waitFor();
+ assert.equal(await page.getByRole('navigation').getByRole('link',{name:'Rule search',exact:true}).getAttribute('aria-current'),'page');
  await page.getByRole('button',{name:'Magyar',exact:true}).click();
- await page.getByRole('navigation').getByRole('link',{name:'Admin',exact:true}).click();
+ await page.getByRole('navigation').getByRole('link',{name:'Szabálykönyv feldolgozása',exact:true}).click();
  await page.getByRole('heading',{name:'Játékgyűjtemény',exact:true}).waitFor();
  assert.equal(await page.locator('html').getAttribute('lang'),'hu');
  for(const width of [768,390,320]) {
@@ -33,8 +33,8 @@ try {
  await page.getByRole('dialog').getByLabel(/A játék neve/).waitFor();
  await shot('dialog-mobile');
  await page.getByRole('dialog').getByRole('button',{name:'Bezárás',exact:true}).click();
- await page.getByRole('navigation').getByRole('link',{name:'Kérdezés',exact:true}).click();
- await page.getByRole('heading',{name:'Kérdezz a szabályokról',exact:true}).waitFor();
+ await page.getByRole('navigation').getByRole('link',{name:'Szabály keresése',exact:true}).click();
+ await page.getByRole('region',{name:'Szabálykérdések',exact:true}).waitFor();
  await shot('player-mobile');
  assert.deepEqual(errors,[]);
  console.log('PASS: admin without login/cookies, two-item shared navigation, active page, English/Hungarian persistence, desktop/tablet/mobile and dialog. No document processing or AI requests.');

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node admin.mjs && node player.mjs",
-    "test:navigation": "node navigation.mjs"
+    "test:navigation": "node navigation.mjs",
+    "test:ui": "node ui.mjs"
   },
   "dependencies": {
     "playwright": "1.63.0"

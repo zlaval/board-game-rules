@@ -4,7 +4,7 @@
 
 ## Summary
 
-RuleShelf is a self-hosted board game rulebook library for your home server. Players choose a game and ask about its published rules, with original excerpts and source references alongside the answer. Administrators collect, process, review and publish rule material in a separate interface. It runs locally with Docker Compose and supports English and Hungarian, with English as the default interface language.
+RuleShelf is a self-hosted board game rulebook library for your home server. Players choose a game and ask about its published rules, with original excerpts and source references alongside the answer. Administrators collect and process rule material in a separate interface. Successfully processed versions are published automatically. It runs locally with Docker Compose and supports English and Hungarian, with English as the default interface language.
 
 ## Features
 
@@ -17,10 +17,10 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 - Process PDFs and images with Docling and OCR in a separate background worker.
 - Follow processing in a terminal-style panel with timestamps, current step and elapsed time, batch counts, API waits, model names and failures.
 - With OpenAI configured, translate extracted rules into selected usage languages and build a multilingual semantic index in PostgreSQL/pgvector. Matching source/usage languages skip translation. Original text and page references are retained.
-- Apply **AI processing** to an already extracted rulebook without repeating OCR. Review its translations before publishing the replacement.
+- Use **Update translation and search** on an already extracted rulebook without repeating OCR. The finished replacement becomes available automatically.
 - Prefer an available NVIDIA GPU; automatically use CPU when no usable GPU is available, and retry failed GPU conversion once on CPU.
 - Review extracted rule sections with source page numbers, search them by keyword, and inspect original figures.
-- Publish reviewed versions. Reprocessing preserves the previous published version until the replacement is approved.
+- Publish successful versions automatically. Reprocessing preserves the previous version until the replacement finishes successfully.
 - Switch the entire admin interface, dialogs, validation messages, API errors and processing statuses between English and Hungarian. The browser remembers your choice.
 - Keep games, documents and model caches in persistent Docker volumes.
 - Open the player and admin interfaces directly, without signing in. Switch between them using the two items in the top menu. Admin operations are available to everyone who can reach the app on your home network.
@@ -40,8 +40,8 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 1. Open [the admin interface](http://localhost:8080/admin) and choose **New game**. Enter the title, edition, rulebook language and optional description.
 2. Open the game and choose **Upload rule material**. Select files or use **Paste text**. Markdown headings help organize sections.
 3. Choose **Rulebook language** and **Use language**. Matching languages skip translation. Leave **Start processing after upload** enabled, or start processing manually later. Follow the **Processing log** at the bottom of the game page.
-4. Choose **Review** when processing finishes. Search the extracted text, check source pages, inspect figures and download the original if needed.
-5. Choose **Reviewed — publish** to approve the version. Later, **Reprocess** creates a separate version while the published one remains available.
+4. Successful processing publishes the rules automatically. Choose **View rules** to search extracted text and inspect figures, or **Download original** to open the source file.
+5. **Reprocess** extracts the file again; **Update translation and search** refreshes only translations and enhanced search. The previous version stays available until a replacement finishes successfully. Unavailable actions are disabled.
 
 The language selector is available in the shared header and inside dialogs. Changing interface language does not translate or modify uploaded rulebooks, game names, descriptions or captions. Rulebook language metadata is independent of the interface language.
 
@@ -67,6 +67,8 @@ Retrieval combines multilingual keyword matches with pgvector cosine similarity.
 
 Run all commands from the project root. You need Docker with the Compose plugin and Linux containers. On Windows, use Docker Desktop with its WSL2 backend. On Proxmox, run Docker inside a Linux VM.
 
+For the home Proxmox VM, see [deployment and maintenance](infra/proxmox/README.md). Its CPU launcher builds without unused CUDA dependencies.
+
 A GPU is optional. NVIDIA acceleration needs a supported driver and Docker GPU access. Linux hosts also need NVIDIA Container Toolkit; a Proxmox VM needs GPU passthrough. The supplied image supports NVIDIA CUDA, not AMD/Intel GPU runtimes. Without working CUDA support, processing uses CPU.
 
 The initial build downloads several GB of CUDA and document-processing dependencies. The first PDF/image conversion may download additional models and therefore needs internet access. Models are cached for later runs. Plain text processing needs no OCR models.
@@ -87,9 +89,9 @@ sh infra/start.sh
 
 The launcher creates `infra/.env` if needed, builds the images and runs a CUDA operation in a temporary container. A successful probe selects `infra/compose.gpu.yaml`; otherwise it starts the CPU configuration. Existing configuration is preserved.
 
-Open [http://localhost:8080](http://localhost:8080) for players, or [http://localhost:8080/admin](http://localhost:8080/admin) for administrators. No admin login is required. Use **Questions** and **Admin** in the top menu to switch interfaces. Keep `infra/.env` private and out of version control.
+Open [http://localhost:8080](http://localhost:8080) for players, or [http://localhost:8080/admin](http://localhost:8080/admin) for administrators. No admin login is required. Use **Rule search** and **Process rulebooks** in the top menu to switch interfaces. Keep `infra/.env` private and out of version control.
 
-Existing rulebooks: choose **AI processing** on the document, then **Review**. Expand **AI translation** to read the translation in the selected interface language, and publish after checking it. The old published version remains in use until then. New uploads use the AI stage automatically when enabled. At upload, choose the **Rulebook language** and **Use language** (English, Hungarian or both). Translation runs only for selected languages different from the source language: Hungarian → Hungarian skips translation entirely; English → Hungarian creates only a Hungarian translation. Original text is still processed and indexed. The selection is saved for extraction and AI-only reprocessing. Existing documents keep their previous bilingual selection. Excerpts are sent to OpenAI for embeddings and any required translations; images remain stored locally. Processing failure keeps usable original material and shows an AI warning.
+Existing rulebooks: choose **Update translation and search** on the document, then **View rules**. Expand **AI translation** to read the translation in the selected interface language. The new version is published automatically when processing succeeds; the previous version remains available until then. New uploads use the AI stage automatically when enabled. At upload, choose the **Rulebook language** and **Use language** (English, Hungarian or both). Translation runs only for selected languages different from the source language: Hungarian → Hungarian skips translation entirely; English → Hungarian creates only a Hungarian translation. Original text is still processed and indexed. The selection is saved for extraction and AI-only reprocessing. Existing documents keep their previous bilingual selection. Excerpts are sent to OpenAI for embeddings and any required translations; images remain stored locally. Processing failure keeps usable original material and shows an AI warning.
 
 The processing log refreshes every two seconds. Select one of the five most recent jobs; **Follow log** scrolls to the newest events. The panel shows up to 250 events, including extraction, translation and indexing timings. During an API call it shows the current step's elapsed time. Events remain with the processed version's files until those files are deleted. Raw provider output and document text are not shown in this log.
 

@@ -22,6 +22,7 @@ function selectedFromURL() {
 export default function Player() {
   const { t, language } = useI18n();
   const [games, setGames] = useState<PlayerGame[]>([]);
+  const [visible, setVisible] = useState<PlayerGame[]>([]);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [selected, setSelected] = useState(selectedFromURL);
   const [documents, setDocuments] = useState<RuleDocument[]>([]);
@@ -33,6 +34,7 @@ export default function Player() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [libraryError, setLibraryError] = useState<unknown>(null);
   const [reload, setReload] = useState(0);
   const [source, setSource] = useState<RuleSource | null>(null);
   const [sourceBusy, setSourceBusy] = useState(false);
@@ -54,36 +56,64 @@ export default function Player() {
     capabilities?.max_audio_bytes ?? 10 * 1024 * 1024,
   );
   const game = games.find((item) => item.id === selected);
-  const visible = games.filter((item) =>
-    `${item.title} ${item.edition}`
-      .toLocaleLowerCase(language)
-      .includes(filter.toLocaleLowerCase(language)),
-  );
-
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    Promise.all([
-      api<PlayerGame[]>("/play/games", { signal: controller.signal }),
-      api<Capabilities>("/play/capabilities", { signal: controller.signal }),
-    ])
-      .then(([items, features]) => {
-        if (controller.signal.aborted) return;
-        setGames(items);
-        setCapabilities(features);
-        setSelected((value) =>
-          items.some((item) => item.id === value) ? value : "",
-        );
+    api<Capabilities>("/play/capabilities", { signal: controller.signal })
+      .then((features) => {
+        if (!controller.signal.aborted) setCapabilities(features);
       })
       .catch((error) => {
         if (!controller.signal.aborted) setError(error);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
   }, [reload]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = filter.trim();
+    setLoading(true);
+    setLibraryError(null);
+    const timer = window.setTimeout(
+      () => {
+        api<PlayerGame[]>(
+          `/play/games${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+          {
+            signal: controller.signal,
+          },
+        )
+          .then((items) => {
+            if (controller.signal.aborted) return;
+            setVisible(items);
+            // Keep the selected game's question available while searching for another.
+            setGames((known) =>
+              query
+                ? [
+                    ...known.filter(
+                      (item) => !items.some((match) => match.id === item.id),
+                    ),
+                    ...items,
+                  ]
+                : items,
+            );
+            if (!query)
+              setSelected((value) =>
+                items.some((item) => item.id === value) ? value : "",
+              );
+          })
+          .catch((error) => {
+            if (!controller.signal.aborted) setLibraryError(error);
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setLoading(false);
+          });
+      },
+      query ? 250 : 0,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [filter, reload]);
 
   useEffect(() => {
     const pop = () => setSelected(selectedFromURL());
@@ -225,12 +255,8 @@ export default function Player() {
   return (
     <div className="player-app">
       <main className="player-main">
-        <div className="player-intro">
-          <h1>{t("Ask the rules")}</h1>
-        </div>
         <div className="player-layout">
           <aside className="player-library" aria-label={t("Choose a game")}>
-            <h2>{t("Your games")}</h2>
             <label className="player-search">
               <span className="sr-only">{t("Search games")}</span>
               <Icon name="search" />
@@ -240,9 +266,37 @@ export default function Player() {
                 placeholder={t("Search games…")}
               />
             </label>
+            <div className="player-mobile-picker">
+              <label className="player-mobile-select">
+                <span className="sr-only">{t("Choose a game")}</span>
+                <select
+                  value={selected}
+                  onChange={(event) => choose(event.target.value)}
+                >
+                  <option value="">{t("Select a game…")}</option>
+                  {games.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="player-refresh"
+                aria-label={t("Refresh library")}
+                title={t("Refresh library")}
+                onClick={() => {
+                  setFilter("");
+                  setReload((value) => value + 1);
+                }}
+                disabled={loading || locked}
+              >
+                <Icon name="refresh" />
+              </button>
+            </div>
             {loading ? (
               <p className="loading">{t("Loading collection…")}</p>
-            ) : games.length === 0 ? (
+            ) : !libraryError && games.length === 0 && !filter.trim() ? (
               <div className="player-empty-library">
                 <Icon name="books" />
                 <strong>{t("No published games yet")}</strong>
@@ -257,22 +311,6 @@ export default function Player() {
               </div>
             ) : (
               <>
-                <label className="player-mobile-select">
-                  {t("Choose a game")}
-                  <select
-                    aria-label={t("Choose a game")}
-                    value={selected}
-                    onChange={(event) => choose(event.target.value)}
-                  >
-                    <option value="">{t("Select a game…")}</option>
-                    {games.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                        {item.edition ? ` · ${item.edition}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <div className="player-game-list">
                   {visible.map((item) => (
                     <button
@@ -286,25 +324,21 @@ export default function Player() {
                       </span>
                       <span>
                         <strong>{item.title}</strong>
-                        <small>{item.edition || t("Published rules")}</small>
                       </span>
                       <Icon name="arrow" />
                     </button>
                   ))}
-                  {visible.length === 0 && (
+                  {!libraryError && visible.length === 0 && (
                     <p>{t("No games match your search.")}</p>
                   )}
                 </div>
               </>
             )}
-            <button
-              className="player-refresh"
-              onClick={() => setReload((value) => value + 1)}
-              disabled={loading || locked}
-            >
-              <Icon name="refresh" />
-              {t("Refresh library")}
-            </button>
+            {!!libraryError && (
+              <p className="error" role="alert">
+                {errorMessage(libraryError, t)}
+              </p>
+            )}
           </aside>
           <section
             className="player-question-area"
@@ -320,55 +354,13 @@ export default function Player() {
                 <div className="player-selected">
                   <div>
                     <h2>{game.title}</h2>
-                    <p>{game.edition}</p>
                   </div>
-                  <span className="player-reviewed">
-                    <Icon name="check" />
-                    {t("Published rules")}
-                  </span>
                 </div>
-                <details className="player-rule-selection">
-                  <summary>
-                    {t("Rulebooks in use")}{" "}
-                    <span>
-                      {documentIds.length}/{documents.length}
-                    </span>
-                  </summary>
-                  {loadingDocs ? (
-                    <p>{t("Loading rulebooks…")}</p>
-                  ) : (
-                    documents.map((doc) => (
-                      <label className="checkbox" key={doc.id}>
-                        <input
-                          type="checkbox"
-                          checked={documentIds.includes(doc.id)}
-                          onChange={(event) =>
-                            selectDocument(doc.id, event.target.checked)
-                          }
-                          disabled={locked}
-                        />
-                        <span>{doc.filename}</span>
-                      </label>
-                    ))
-                  )}
-                  <p>
-                    {t(
-                      "Select only the rulebooks that apply to this game session.",
-                    )}
-                  </p>
-                </details>
                 {!capabilities?.explanations && capabilities && (
                   <div className="player-mode-note">
                     <Icon name="search" />
                     <p>{t("Rule search · AI explanations are unavailable.")}</p>
                   </div>
-                )}
-                {capabilities?.explanations && (
-                  <p className="player-cloud-note">
-                    {t(
-                      "For explanations, your question and selected rule excerpts are sent to OpenAI.",
-                    )}
-                  </p>
                 )}
                 <form className="player-composer" onSubmit={ask}>
                   <label htmlFor="player-question">{t("Your question")}</label>
@@ -407,6 +399,21 @@ export default function Player() {
                         loadingDocs
                       }
                       onClick={voice.recording ? voice.stop : voice.start}
+                      aria-label={
+                        voice.recording
+                          ? t("Stop recording")
+                          : voice.transcribing
+                            ? t("Transcribing…")
+                            : t("Use microphone")
+                      }
+                      title={
+                        voice.recording
+                          ? t("Stop recording")
+                          : voice.transcribing
+                            ? t("Transcribing…")
+                            : t("Use microphone")
+                      }
+                      aria-pressed={voice.recording}
                     >
                       <svg
                         className="icon"
@@ -421,11 +428,6 @@ export default function Player() {
                         <rect x="9" y="3" width="6" height="12" rx="3" />
                         <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
                       </svg>
-                      {voice.recording
-                        ? t("Stop recording")
-                        : voice.transcribing
-                          ? t("Transcribing…")
-                          : t("Use microphone")}
                     </button>
                     {locked && (
                       <button
@@ -456,21 +458,11 @@ export default function Player() {
                       <Icon name="arrow" />
                     </button>
                   </div>
-                  <p className="player-input-help">
-                    {voice.recording
-                      ? t("Recording… Stop when finished. Maximum 60 seconds.")
-                      : !capabilities?.transcription
-                        ? t(
-                            "Voice input is currently unavailable. You can type your question.",
-                          )
-                        : !voice.supported
-                          ? t(
-                              "Microphone access requires HTTPS or localhost and a supported browser.",
-                            )
-                          : t(
-                              "Voice recordings are sent to OpenAI for transcription and are not saved by this app.",
-                            )}
-                  </p>
+                  {voice.recording && (
+                    <p className="player-input-help" role="status">
+                      {t("Recording… Stop when finished. Maximum 60 seconds.")}
+                    </p>
+                  )}
                   {!loadingDocs && !documentIds.length && (
                     <p className="player-input-help">
                       {t(
@@ -484,6 +476,31 @@ export default function Player() {
                     </p>
                   )}
                 </form>
+                <details className="player-rule-selection">
+                  <summary>
+                    {t("Rulebooks in use")}{" "}
+                    <span>
+                      {documentIds.length}/{documents.length}
+                    </span>
+                  </summary>
+                  {loadingDocs ? (
+                    <p>{t("Loading rulebooks…")}</p>
+                  ) : (
+                    documents.map((doc) => (
+                      <label className="checkbox" key={doc.id}>
+                        <input
+                          type="checkbox"
+                          checked={documentIds.includes(doc.id)}
+                          onChange={(event) =>
+                            selectDocument(doc.id, event.target.checked)
+                          }
+                          disabled={locked}
+                        />
+                        <span>{doc.filename}</span>
+                      </label>
+                    ))
+                  )}
+                </details>
                 {busy && (
                   <p className="player-working" role="status">
                     {t("Checking the selected rulebooks…")}
@@ -582,10 +599,17 @@ export default function Player() {
                         )}
                         {answer.timings && (
                           <p className="player-input-help">
-                            {t("Search: {search}s · Explanation: {explanation}s", {
-                              search: (answer.timings.search_ms / 1000).toFixed(1),
-                              explanation: (answer.timings.explanation_ms / 1000).toFixed(1),
-                            })}
+                            {t(
+                              "Search: {search}s · Explanation: {explanation}s",
+                              {
+                                search: (
+                                  answer.timings.search_ms / 1000
+                                ).toFixed(1),
+                                explanation: (
+                                  answer.timings.explanation_ms / 1000
+                                ).toFixed(1),
+                              },
+                            )}
                           </p>
                         )}
                         {answer.sources.length > 0 && (
@@ -624,11 +648,6 @@ export default function Player() {
                         {answer.assets.length > 0 && (
                           <div className="player-figures">
                             <h4>{t("Original figures from source pages")}</h4>
-                            <p>
-                              {t(
-                                "These figures come from the cited pages. Their exact connection to the question still needs checking.",
-                              )}
-                            </p>
                             <div>
                               {answer.assets.map((asset) => (
                                 <button

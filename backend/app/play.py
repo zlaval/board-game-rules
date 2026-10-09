@@ -27,13 +27,15 @@ def capabilities():
 
 
 @router.get("/games")
-def games():
+def games(q: str = ""):
     with connect() as db:
         return db.execute(
             "SELECT g.id,g.title,g.edition,g.language,g.description,count(d.id)::int AS document_count "
             "FROM games g JOIN documents d ON d.game_id=g.id "
             "JOIN versions v ON v.document_id=d.id AND v.status='published' "
-            "GROUP BY g.id ORDER BY lower(g.title),g.id"
+            "WHERE strpos(lower(g.title || ' ' || g.edition), lower(%s)) > 0 "
+            "GROUP BY g.id ORDER BY lower(g.title),g.id",
+            (q.strip(),),
         ).fetchall()
 
 

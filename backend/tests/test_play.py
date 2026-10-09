@@ -10,6 +10,7 @@ from openai import OpenAI
 from app import answers, config, play
 from app.db import connect
 from app.storage import storage_path
+from app.worker import claim, run_job
 from test_admin import add_text, create_game, process
 
 
@@ -27,7 +28,7 @@ def published(
     game = create_game(client, title)
     doc = add_text(client, game, text)
     version = process(client, doc)
-    assert client.post(f"/api/versions/{version}/publish").status_code == 200
+    assert client.get(f"/api/play/games/{game}/documents").json()[0]["version_id"] == version
     return game, doc, version
 
 
@@ -91,6 +92,8 @@ def test_reader_only_lists_published_rules_while_admin_can_access_drafts(client)
     draft_doc = add_text(client, draft_game)
     draft_version = process(client, draft_doc)
     with connect() as db:
+        # Archived processed versions must remain inaccessible to the reader.
+        db.execute("UPDATE versions SET status='ready',published_at=NULL WHERE id=%s", (draft_version,))
         draft_chunk = db.execute(
             "SELECT id FROM chunks WHERE version_id=%s LIMIT 1", (draft_version,)
         ).fetchone()["id"]
@@ -106,6 +109,28 @@ def test_reader_only_lists_published_rules_while_admin_can_access_drafts(client)
     )
     assert ask(client, draft_game).status_code == 409
     assert client.get("/api/play/capabilities").json()["explanations"] is False
+
+
+def test_game_search_queries_published_titles_and_editions_as_literal_text(client):
+    game, _, _ = published(client, "Árvíz 100%_ Reader")
+    other, _, _ = published(client, "Other game")
+    create_game(client, "Reader draft")
+
+    def search(query):
+        response = client.get("/api/play/games", params={"q": query})
+        assert response.status_code == 200
+        return [row["id"] for row in response.json()]
+
+    assert search("  READER  ") == [game]
+    assert search("árvíz") == [game]
+    assert set(search("2024")) == {other, game}
+    assert search("%_") == [game]
+    assert search("' OR 1=1 --") == []
+    assert search("missing") == []
+    assert set(search("   ")) == {other, game}
+    # A newly published game appears on the next query without a library refresh.
+    newer, _, _ = published(client, "Reader newly published")
+    assert set(search("reader")) == {game, newer}
 
 
 def test_local_search_isolates_games_rule_selection_and_has_no_fabricated_answer(client):
@@ -167,10 +192,10 @@ def test_source_and_image_endpoints_reject_other_games_and_unpublished_versions(
 
 def test_reprocessing_uses_previous_published_version_until_swap(client):
     game, doc, first = published(client)
-    second = process(client, doc)
+    second = client.post(f"/api/documents/{doc}/process").json()["version_id"]
     result = ask(client, game).json()
     assert {row["version_id"] for row in result["sources"]} == {first}
-    client.post(f"/api/versions/{second}/publish")
+    run_job(claim())
     assert {row["version_id"] for row in ask(client, game).json()["sources"]} == {second}
 
 
