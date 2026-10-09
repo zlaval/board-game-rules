@@ -4,6 +4,10 @@
 **/.pytest_cache
 **/.ruff_cache
 frontend/dist
-infra/.env
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+release
 test-results
 

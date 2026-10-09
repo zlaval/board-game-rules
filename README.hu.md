@@ -2,6 +2,22 @@
 
 [English](README.md) · [Magyar](README.hu.md)
 
+## Gyorsindítás — kész image-ekkel
+
+Csomagold ki a **0.1.0 kiadás ZIP-jét**, vagy másold a [`release/`](release/README.hu.md) mappát. Docker és Compose v2 kell Linux-konténerekkel, **x86-64 / AMD64** gépen; az alapfeldolgozó CPU-t használ.
+
+1. Nyisd meg a release mappát. A ZIP-ben már van `.env`; Gitből használva másold a `.env.example` fájlt `.env` néven (`cp .env.example .env` vagy PowerShellben `Copy-Item .env.example .env`).
+2. Töltsd ki a `.env` fájlt: saját, legalább 32 karakteres véletlen `POSTGRES_PASSWORD` jelszó kell (csak betűk, számok, `_` és `-`). Opcionálisan add meg **a saját** `OPENAI_API_KEY` kulcsodat; üresen helyi keresés és kinyerés használható. A csomag nem tartalmaz privát kulcsot.
+3. Ebben a mappában futtasd:
+
+```sh
+docker compose up -d
+```
+
+A [Szabály keresése](http://localhost:8080) és a [Szabálykönyv feldolgozása](http://localhost:8080/admin) felületen használhatod. Az image-ek a [`zalerix` Docker Hub-fiókból](https://hub.docker.com/u/zalerix) töltődnek le, rögzített `0.1.0` verzióval. Nem kell forráskódot fordítani vagy GPU-t használni. Az adatok Docker-volume-okban megmaradnak; a kitöltött `.env` fájlt kezeld titokként, és frissítéskor őrizd meg. Az alkalmazás nem kér belépést, alapból csak localhoston érhető el.
+
+A [kiadási útmutató](release/README.hu.md) bemutatja a beállításokat, frissítést, hálózati elérést és az opcionális NVIDIA-image-et. Az [új verzió publikálása](docs/releases.md) külön dokumentált. Az alábbi részek a forráskódból történő helyi futtatásról és fejlesztésről szólnak.
+
 ## Rövid összefoglaló
 
 A Szabálytár otthon futtatható társasjáték-szabálykönyvtár. A játékos játékot választ és kérdez a közzétett szabályokról; a válasz mellett eredeti szabályrészletek és forráshivatkozások jelennek meg. Az admin külön felületen gyűjti és feldolgozza a szabályanyagokat; a sikeresen feldolgozott változatok automatikusan közzétételre kerülnek. Docker Compose-zal indul, angol és magyar felülettel; az alapértelmezett nyelv az angol.

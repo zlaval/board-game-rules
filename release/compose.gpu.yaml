@@ -1,0 +1,13 @@
+# Requires an NVIDIA GPU, a supported driver and Docker GPU access.
+services:
+  worker:
+    image: zalerix/ruleshelf-worker:${RULESHELF_VERSION:-0.1.0}-cuda
+    environment:
+      PROCESSING_DEVICE: auto
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

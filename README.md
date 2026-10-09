@@ -2,6 +2,22 @@
 
 [English](README.md) · [Magyar](README.hu.md)
 
+## Quickstart — prebuilt images
+
+Download/extract the **0.1.0 release ZIP**, or copy the [`release/`](release/README.md) folder. Docker with Compose v2 and Linux containers on an **x86-64 / AMD64** computer is all you need; the default worker uses CPU.
+
+1. Open the release folder. The ZIP includes `.env`; when using Git, copy `.env.example` to `.env` (`cp .env.example .env` or `Copy-Item .env.example .env` in PowerShell).
+2. Fill in `.env`: set your own random `POSTGRES_PASSWORD` (32+ characters, only letters, numbers, `_` and `-`). Optionally set **your own** `OPENAI_API_KEY`; leave it empty for local search and extraction. The package contains no private key.
+3. Run in that folder:
+
+```sh
+docker compose up -d
+```
+
+Open [Rule search](http://localhost:8080) or [Process rulebooks](http://localhost:8080/admin). Images are downloaded from [`zalerix` on Docker Hub](https://hub.docker.com/u/zalerix), pinned to version `0.1.0`. No source build or GPU is required. Data persists in Docker volumes; keep your filled-in `.env` private and preserve it during upgrades. The app has no login and binds to localhost by default.
+
+See the [release guide](release/README.md) for configuration, updates, home-network access and the optional NVIDIA image. [Release publishing](docs/releases.md) explains how to build and publish a new version. The sections below describe source development and local builds.
+
 ## Summary
 
 RuleShelf is a self-hosted board game rulebook library for your home server. Players choose a game and ask about its published rules, with original excerpts and source references alongside the answer. Administrators collect and process rule material in a separate interface. Successfully processed versions are published automatically. It runs locally with Docker Compose and supports English and Hungarian, with English as the default interface language.

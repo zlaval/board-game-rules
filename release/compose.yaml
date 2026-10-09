@@ -1,0 +1,77 @@
+name: ruleshelf
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Fill POSTGRES_PASSWORD in .env}@postgres:5432/rules
+  DATA_DIR: /data
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+  MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-6-luna}
+  OPENAI_PROCESSING_MODEL: ${OPENAI_PROCESSING_MODEL:-gpt-6-luna}
+  OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+  AI_PROCESSING_ENABLED: ${AI_PROCESSING_ENABLED:-true}
+  AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-2000}
+  AI_MAX_CHARACTERS: ${AI_MAX_CHARACTERS:-600000}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    environment:
+      POSTGRES_DB: rules
+      POSTGRES_USER: rules
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Fill POSTGRES_PASSWORD in .env}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rules -d rules"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: zalerix/ruleshelf-api:${RULESHELF_VERSION:-0.1.0}
+    environment:
+      <<: *app-environment
+      OPENAI_TRANSCRIPTION_MODEL: ${OPENAI_TRANSCRIPTION_MODEL:-gpt-transcribe}
+    volumes:
+      - documents:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    init: true
+
+  worker:
+    image: zalerix/ruleshelf-worker:${RULESHELF_VERSION:-0.1.0}-cpu
+    environment:
+      <<: *app-environment
+      PROCESSING_DEVICE: cpu
+    volumes:
+      - documents:/data
+      - models:/models
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+
+  frontend:
+    image: zalerix/ruleshelf-frontend:${RULESHELF_VERSION:-0.1.0}
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  database:
+  documents:
+  models:

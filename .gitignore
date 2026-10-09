@@ -1,4 +1,7 @@
 infra/.env
+release/.env
+release/*.zip
+release/*.sha256
 node_modules/
 frontend/dist/
 __pycache__/
