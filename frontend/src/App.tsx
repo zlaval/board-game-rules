@@ -871,27 +871,39 @@ export default function App() {
     <div className="admin-app">
       <main className="admin-main">
         <div className="main-content">
-          <div className="page-heading">
+          <div className={`page-heading ${game ? "game-heading" : ""}`}>
             <div>
               <h1>{game ? game.title : t("Game collection")}</h1>
               {game?.edition && <p>{game.edition}</p>}
             </div>
             <div className="page-heading-actions">
-              {!game && (
-                <div className="search-field">
-                  <Icon name="search" />
-                  <input
-                    placeholder={t("Search games…")}
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    aria-label={t("Search games")}
-                  />
-                </div>
+              {game ? (
+                <button
+                  className="button secondary"
+                  onClick={() => setSelected(null)}
+                >
+                  {t("← Back to collection")}
+                </button>
+              ) : (
+                <>
+                  <div className="search-field">
+                    <Icon name="search" />
+                    <input
+                      placeholder={t("Search games…")}
+                      value={filter}
+                      onChange={(e) => setFilter(e.target.value)}
+                      aria-label={t("Search games")}
+                    />
+                  </div>
+                  <button
+                    className="button primary"
+                    onClick={() => setForm("new")}
+                  >
+                    <Icon name="plus" />
+                    {t("New game")}
+                  </button>
+                </>
               )}
-              <button className="button primary" onClick={() => setForm("new")}>
-                <Icon name="plus" />
-                {t("New game")}
-              </button>
             </div>
           </div>
           {!!error && (
@@ -972,33 +984,29 @@ export default function App() {
             </>
           ) : (
             <>
-              <div className="detail-toolbar">
-                <button
-                  className="text-button"
-                  onClick={() => setSelected(null)}
-                >
-                  {t("← Back to collection")}
-                </button>
-                <button
-                  className="button secondary"
-                  onClick={() => setForm("edit")}
-                >
-                  <Icon name="edit" />
-                  {t("Edit details")}
-                </button>
-              </div>
-              <div className="collection-toolbar">
+              <div className="collection-toolbar rule-toolbar">
                 <h2>
                   {t("Rule material")}
                   <span>{documents.length}</span>
                 </h2>
-                <button
-                  className="button primary"
-                  onClick={() => setUpload(true)}
-                >
-                  <Icon name="upload" />
-                  {t("Upload rule material")}
-                </button>
+                <div className="rule-toolbar-actions">
+                  <button
+                    className="button secondary"
+                    onClick={() => setForm("edit")}
+                  >
+                    <Icon name="edit" />
+                    {t("Edit details")}
+                  </button>
+                  {documents.length > 0 && (
+                    <button
+                      className="button primary"
+                      onClick={() => setUpload(true)}
+                    >
+                      <Icon name="upload" />
+                      {t("Upload rule material")}
+                    </button>
+                  )}
+                </div>
               </div>
               {docLoading ? (
                 <p className="loading">{t("Loading documents…")}</p>
@@ -1014,7 +1022,7 @@ export default function App() {
                     onClick={() => setUpload(true)}
                   >
                     <Icon name="upload" />
-                    {t("Upload")}
+                    {t("Upload rule material")}
                   </button>
                 </section>
               ) : (

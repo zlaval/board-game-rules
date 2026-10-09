@@ -347,6 +347,14 @@ svg {
   padding: 0 12px;
   height: 44px;
 }
+.game-heading > div:first-child {
+  min-width: 0;
+}
+.rule-toolbar-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
 .search-field input:focus,
 .preview-search input:focus {
   box-shadow: none;
@@ -1037,6 +1045,29 @@ textarea {
     flex: 1;
     min-width: 0;
     width: auto;
+  }
+  .page-heading.game-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  .game-heading .page-heading-actions {
+    width: auto;
+    max-width: 50%;
+    flex-shrink: 0;
+  }
+  .page-heading.game-heading .button {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .rule-toolbar-actions {
+    margin-left: auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .rule-toolbar-actions .button {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
   }
   .page-heading h1 {
     font-size: 24px;
