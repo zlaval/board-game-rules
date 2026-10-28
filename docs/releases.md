@@ -2,6 +2,8 @@
 
 The user-facing package lives in `release/`. It uses public, versioned Docker Hub images and needs no source build. The release currently targets `linux/amd64`.
 
+Keep API keys, database passwords, private key files and local rulebooks out of version control and image builds. `.gitignore` covers environment variants, private key files and root-level PDF inputs; `.dockerignore` separately excludes them from the build context. Ignore rules do not remove already tracked files or earlier commits. Check tracked files and history before publication. Only `.env.example` templates with blank credentials belong in Git; the package builder also rejects duplicate credential assignments.
+
 ## Create a new version
 
 1. Set the same semantic version in `release/VERSION`, `release/.env.example`, the defaults in both release Compose files, and the quickstarts/image tables in both root and release READMEs. Keep all application image versions together. Document notable changes in [the changelog](changelog.md).

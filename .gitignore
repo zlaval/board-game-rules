@@ -1,5 +1,20 @@
-infra/.env
-release/.env
+# Private configuration, including environment-specific variants in any directory.
+.env
+.env.*
+!.env.example
+.aws/
+.ssh/
+.docker/
+*.pem
+*.key
+*.p12
+*.pfx
+# Local rulebooks and runtime data do not belong in the source repository.
+/*.pdf
+/data/
+/documents/
+/models/
+/backups/
 release/*.zip
 release/*.sha256
 node_modules/

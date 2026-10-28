@@ -5,7 +5,10 @@ $version = (Get-Content (Join-Path $releasePath 'VERSION') -Raw).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'release/VERSION must be a semantic version such as 0.1.0.' }
 $template = [IO.File]::ReadAllText((Join-Path $releasePath '.env.example'))
 foreach ($field in @('OPENAI_API_KEY', 'POSTGRES_PASSWORD')) {
-    if ($template -notmatch "(?m)^$field=\r?$" ) { throw "The public template must have an empty $field." }
+    $assignments = @([regex]::Matches($template, "(?m)^$field=(.*)$"))
+    if ($assignments.Count -ne 1 -or $assignments[0].Groups[1].Value.Trim() -ne '') {
+        throw "The public template must have exactly one empty $field assignment."
+    }
 }
 if ($template -notmatch "(?m)^RULESHELF_VERSION=$([regex]::Escape($version))\r?$" ) { throw 'The template version must match release/VERSION.' }
 
