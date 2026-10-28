@@ -340,7 +340,22 @@ function UploadForm({
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState("");
   const [autoProcess, setAutoProcess] = useState(true);
+  const [maxUploadBytes, setMaxUploadBytes] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    api<{ max_upload_bytes: number }>("/upload-limits", {
+      signal: controller.signal,
+    })
+      .then((limits) => {
+        if (!controller.signal.aborted)
+          setMaxUploadBytes(limits.max_upload_bytes);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(error);
+      });
+    return () => controller.abort();
+  }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -359,10 +374,12 @@ function UploadForm({
         setMessage(file ? file.name : "__text__");
         let document: { id: string };
         if (file) {
-          if (file.size > 50 * 1024 * 1024)
+          if (maxUploadBytes === null)
+            throw new MessageError("Loading upload limits…");
+          if (file.size > maxUploadBytes)
             throw new MessageError(
-              "{name}: the file must be no larger than 50 MB.",
-              { name: file.name },
+              "{name}: the file must be no larger than {limit} MB.",
+              { name: file.name, limit: maxUploadBytes / 1024 / 1024 },
             );
           const data = new FormData();
           data.set("file", file);
@@ -462,7 +479,14 @@ function UploadForm({
               <span>{t("or click to choose files")}</span>
 
               <small>
-                {t("PDF, TXT, Markdown, PNG, JPG, WebP · up to 50 MB per file")}
+                {maxUploadBytes === null
+                  ? t("Loading upload limits…")
+                  : t(
+                      "PDF, TXT, Markdown, PNG, JPG, WebP · up to {limit} MB per file",
+                      {
+                        limit: maxUploadBytes / 1024 / 1024,
+                      },
+                    )}
               </small>
             </button>
             {files.length > 0 && (
@@ -574,7 +598,10 @@ function UploadForm({
           >
             {t("Cancel")}
           </button>
-          <button className="button primary" disabled={busy}>
+          <button
+            className="button primary"
+            disabled={busy || (mode === "file" && maxUploadBytes === null)}
+          >
             <Icon name="upload" />
             {busy
               ? t("Uploading…")

@@ -97,6 +97,11 @@ class TextInput(BaseModel):
         return value
 
 
+@app.get("/api/upload-limits")
+def upload_limits():
+    return {"max_upload_bytes": config.MAX_UPLOAD_BYTES}
+
+
 @app.get("/api/health")
 def health():
     try:

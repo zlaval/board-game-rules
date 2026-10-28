@@ -61,7 +61,7 @@ RuleShelf is a self-hosted board game rulebook library for your home server. Pla
 
 The language selector is available in the shared header and inside dialogs. Changing interface language does not translate or modify uploaded rulebooks, game names, descriptions or captions. Rulebook language metadata is independent of the interface language.
 
-Current limits: 50 MB per file by default, 100 pages per document, and a 30-minute processing timeout. Multiple uploaded images currently become separate documents. Source references use actual PDF page positions rather than printed page labels. OCR output still needs human review.
+Current limits: 200 MB per file by default, 100 pages per document, and a 30-minute processing timeout. Multiple uploaded images currently become separate documents. Source references use actual PDF page positions rather than printed page labels. OCR output still needs human review.
 
 Retrieval combines multilingual keyword matches with pgvector cosine similarity. For larger books it expands neighboring fragments and the best contiguous sections, then uses up to two source page references to include related procedures and their continuation pages. The context remains limited to 32,000 content/heading characters and 160 original fragments. With AI enabled, small selected rulebooks (up to 40 chunks and 32,000 content/heading characters) are supplied in full. Answers display search and explanation timings. `gpt-6-luna`/`gpt-6-sol` explanations use low reasoning effort for up to 40 fragments and medium for larger contexts; source IDs are restricted to supplied sources in the response schema and checked again. AI translations and topic keywords help retrieval, but explanations cite the original rules only. Page hints currently use actual PDF positions, so different printed numbering can miss the intended page. Exact card/figure associations, PWA installation and conversational follow-ups remain planned. Distant exceptions can still be missed; source identifier checks do not prove that every explanation is correct.
 
@@ -122,7 +122,7 @@ Edit `infra/.env` and run the launcher again to apply changes.
 | `APP_BIND_ADDRESS` | `127.0.0.1` | Address exposed on the Docker host |
 | `APP_PORT` | `8080` | Host HTTP port |
 | `POSTGRES_PASSWORD` | Generated | Database password; preserve it with the database volume |
-| `MAX_UPLOAD_MB` | `50` | Server upload size limit |
+| `MAX_UPLOAD_MB` | `200` | Server upload size limit |
 | `MAX_DOCUMENT_PAGES` | `100` | PDF/image conversion page limit |
 | `PROCESSING_DEVICE` | `auto` | Prefer usable CUDA; `cpu` forces CPU processing |
 | `OPENAI_API_KEY` | Empty | Server-side OpenAI key; empty means local rule search only |
@@ -150,7 +150,7 @@ The question and selected excerpts are sent to OpenAI for explanations; recordin
 
 Question and transcription requests share a limit of 12 per minute per API-visible client address. Behind the bundled proxy, household devices share its address. At most two provider calls run concurrently, with a 45-second timeout and no automatic retry; answer output is limited to 1,800 tokens. These bounds are not a monetary spending cap; configure your provider budget separately.
 
-Microphone capture needs HTTPS or `localhost`, a supported browser and microphone permission. Plain HTTP from a phone to a server IP permits typed questions but not microphone access. Browser recordings stop after 60 seconds; uploads are limited to 10 MB. Review the transcription before sending a question. Real Android/iOS microphone acceptance with trusted local HTTPS remains a deployment check.
+Microphone capture needs a supported browser and microphone permission. The app does not enforce HTTPS or disable the microphone button on HTTP. Browsers normally restrict microphone access to secure contexts; any browser configuration needed for HTTP access must be handled on the client. Browser recordings stop after 60 seconds; uploads are limited to 10 MB. Review the transcription before sending a question. Real Android/iOS microphone acceptance with trusted local HTTPS remains a deployment check.
 
 ### 4. Manual Compose startup
 

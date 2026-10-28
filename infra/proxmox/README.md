@@ -86,17 +86,17 @@ no login and the service is intended for the home LAN.
 | Guest | Ubuntu Server 24.04 LTS, user `ubuntu` (SSH key, sudo) |
 | Resources | 4 vCPUs, 4 GiB RAM, 80 GiB disk, 2 GiB swap |
 | Storage / bridge | `local-lvm` / `vmbr0` |
-| LAN address | DHCP: `192.168.1.80` |
+| LAN address | DHCP: `192.168.1.79` |
 | MAC for DHCP reservation | `BC:24:11:26:D6:EE` |
 | Application | `/opt/ruleshelf`, HTTP port `8080` |
 | Worker | CPU; the host has Intel UHD 620, no supported NVIDIA GPU |
 | Timezone | `Europe/Budapest` |
 
-Reserve the MAC address in the router to keep `192.168.1.80` stable.
+Reserve the MAC address in the router to keep `192.168.1.79` stable.
 Application updates on this VM use the CPU launcher:
 
 ```sh
-ssh ubuntu@192.168.1.80
+ssh ubuntu@192.168.1.79
 cd /opt/ruleshelf
 sudo sh infra/proxmox/start-cpu.sh
 sudo docker compose --env-file infra/.env -f infra/compose.yaml -f infra/compose.cpu.yaml ps

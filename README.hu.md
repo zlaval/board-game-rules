@@ -68,7 +68,7 @@ A felület nyelvét a fejlécben és a párbeszédablakokban is megváltoztathat
 
 ### Korlátok és a találatok értelmezése
 
-Alapértelmezetten egy fájl legfeljebb 50 MB-os, egy dokumentum legfeljebb 100 oldalas lehet. Egy feldolgozásra legfeljebb 30 perc áll rendelkezésre. Ha több képet töltesz fel, mindegyik külön dokumentumként kerül a gyűjteménybe. A PDF-ekre mutató hivatkozások a fájl tényleges oldalsorrendjét követik, amely eltérhet az oldalakra nyomtatott számozástól. A karakterfelismerés eredményét érdemes az eredeti dokumentummal összevetni.
+Alapértelmezetten egy fájl legfeljebb 200 MB-os, egy dokumentum legfeljebb 100 oldalas lehet. Egy feldolgozásra legfeljebb 30 perc áll rendelkezésre. Ha több képet töltesz fel, mindegyik külön dokumentumként kerül a gyűjteménybe. A PDF-ekre mutató hivatkozások a fájl tényleges oldalsorrendjét követik, amely eltérhet az oldalakra nyomtatott számozástól. A karakterfelismerés eredményét érdemes az eredeti dokumentummal összevetni.
 
 A keresés a többnyelvű kulcsszavas találatokat a szövegek jelentésbeli hasonlóságával egészíti ki. Nagyobb könyveknél a találatok szomszédos részleteit és a legjobban illeszkedő, összefüggő fejezeteket is figyelembe veszi. Legfeljebb két, a szövegben szereplő oldalhivatkozást is követ, hogy a kapcsolódó eljárások és azok folytatásai bekerülhessenek a válaszhoz használt anyagba.
 
@@ -147,7 +147,7 @@ A beállításokat az `infra/.env` fájlban módosíthatod. A változtatások al
 | `APP_BIND_ADDRESS` | `127.0.0.1` | Meghatározza, a gép melyik hálózati címén érhető el az alkalmazás. |
 | `APP_PORT` | `8080` | Az alkalmazás HTTP-portja a gépen. |
 | `POSTGRES_PASSWORD` | Automatikusan generált | Az adatbázis jelszava. A meglévő adatbázis mellett őrizd meg változatlanul. |
-| `MAX_UPLOAD_MB` | `50` | Egy feltöltött fájl legnagyobb mérete megabájtban. |
+| `MAX_UPLOAD_MB` | `200` | Egy feltöltött fájl legnagyobb mérete megabájtban. |
 | `MAX_DOCUMENT_PAGES` | `100` | A PDF-ek és képek feldolgozásának oldalszámkorlátja. |
 | `PROCESSING_DEVICE` | `auto` | Az `auto` előnyben részesíti a használható CUDA-t, a `cpu` mindig a processzort használja. |
 | `OPENAI_API_KEY` | Üres | Az OpenAI-kulcs. Üresen az alkalmazás helyi szabálykeresést végez. |
@@ -181,7 +181,7 @@ Az OpenAI használatához érvényes kulcsra, a választott modellekhez való ho
 
 A kérdések és a beszédfelismerési kérések közös korlátja percenként 12 kérés az API által látott klienscímenként. A mellékelt közvetítő szolgáltatás miatt az otthoni eszközök az API felől ugyanarról a címről jelentkeznek, így ezt a keretet közösen használják. Egyszerre legfeljebb két szolgáltatói hívás futhat. A hívások időkorlátja 45 másodperc, automatikus újrapróbálkozás nincs. Egy válasz legfeljebb 1800 kimeneti tokenből állhat. Ezek a korlátok nem helyettesítik az OpenAI-fiókban beállítható költési keretet.
 
-A mikrofon használatához HTTPS-kapcsolat vagy `localhost` cím, megfelelő böngésző és mikrofonengedély kell. Ha telefonról, egyszerű HTTP-kapcsolaton éred el a szerver IP-címét, a kérdést beírhatod, de a mikrofont nem használhatod. A felvétel 60 másodperc után leáll, a hangfeltöltés méretkorlátja 10 MB. A felismert szöveget elküldés előtt javíthatod. Androidon és iOS-en a mikrofon működését a végleges, megbízható HTTPS-kapcsolaton külön is ellenőrizni kell.
+A mikrofon használatához megfelelő böngésző és mikrofonengedély kell. Az alkalmazás HTTP-elérésnél sem tiltja le a mikrofon gombját, és nem követel meg HTTPS-kapcsolatot. A böngészők alapbeállításai ettől még korlátozhatják a mikrofon használatát; a HTTP-eléréshez szükséges engedélyeket a klienseszközön kell beállítani. A felvétel 60 másodperc után leáll, a hangfeltöltés méretkorlátja 10 MB. A felismert szöveget elküldés előtt javíthatod. Androidon és iOS-en a mikrofon működését a végleges, megbízható HTTPS-kapcsolaton külön is ellenőrizni kell.
 
 ### 4. Indítás közvetlenül a Compose segítségével
 

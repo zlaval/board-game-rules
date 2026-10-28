@@ -14,15 +14,15 @@ A Docker a VM-be kerül, a Proxmox gazdagépre nem kell telepíteni.
 | Operációs rendszer | Ubuntu Server 24.04 LTS |
 | Erőforrások | 4 CPU, 4 GiB RAM, 80 GiB lemez, 2 GiB swap |
 | Tároló / hálózati híd | `local-lvm` / `vmbr0` |
-| IP-cím | DHCP: `192.168.1.80` |
+| IP-cím | DHCP: `192.168.1.79` |
 | MAC-cím DHCP-foglaláshoz | `BC:24:11:26:D6:EE` |
 | Alkalmazás mappája | `/opt/ruleshelf` |
 | SSH-felhasználó | `ubuntu`, kulcsos belépés és sudo |
 | Feldolgozó | CPU; a szerveren Intel UHD 620 van, támogatott NVIDIA GPU nincs |
 | Időzóna | `Europe/Budapest` |
 
-A routerben érdemes a MAC-címhez lefoglalni a `192.168.1.80` címet.
-A játékosfelület: `http://192.168.1.80:8080`, az admin: `http://192.168.1.80:8080/admin`.
+A routerben érdemes a MAC-címhez lefoglalni a `192.168.1.79` címet.
+A játékosfelület: `http://192.168.1.79:8080`, az admin: `http://192.168.1.79:8080/admin`.
 
 ## Új telepítés
 
@@ -67,7 +67,7 @@ használható. Mentéshez az adatbázist, dokumentumokat és konfigurációt egy
 ## Indítás, frissítés és ellenőrzés
 
 ```sh
-ssh ubuntu@192.168.1.80
+ssh ubuntu@192.168.1.79
 cd /opt/ruleshelf
 sudo sh infra/proxmox/start-cpu.sh
 sudo docker compose --env-file infra/.env -f infra/compose.yaml -f infra/compose.cpu.yaml ps

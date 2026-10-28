@@ -3,7 +3,7 @@ from pathlib import Path
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://rules:rules@localhost:5432/rules")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
-MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "200")) * 1024 * 1024
 MAX_DOCUMENT_PAGES = int(os.environ.get("MAX_DOCUMENT_PAGES", "100"))
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 OPENAI_ANSWER_MODEL = os.environ.get("OPENAI_ANSWER_MODEL", "gpt-6-luna")

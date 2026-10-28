@@ -42,6 +42,17 @@ def test_admin_read_and_write_without_login(client):
     assert client.cookies.get("rules_session") is None
 
 
+def test_upload_limits_follow_server_configuration(client, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "MAX_UPLOAD_BYTES", 200 * 1024 * 1024)
+    assert client.get("/api/upload-limits").json() == {
+        "max_upload_bytes": 200 * 1024 * 1024
+    }
+    monkeypatch.setattr(config, "MAX_UPLOAD_BYTES", 100)
+    assert client.get("/api/upload-limits").json() == {"max_upload_bytes": 100}
+
+
 def test_cross_origin_write_rejected(client):
     response = client.post(
         "/api/games", json={"title": "Bad origin"}, headers={"Origin": "https://another.example"}

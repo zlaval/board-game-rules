@@ -392,7 +392,6 @@ export default function Player() {
                       className={`button secondary player-microphone ${voice.recording ? "recording" : ""}`}
                       disabled={
                         !capabilities?.transcription ||
-                        !voice.supported ||
                         busy ||
                         voice.requesting ||
                         voice.transcribing ||

@@ -8,4 +8,7 @@ RUN npm run build
 FROM caddy:2-alpine
 COPY --from=build /app/dist /srv
 COPY infra/Caddyfile /etc/caddy/Caddyfile
+COPY infra/frontend-entrypoint.sh /usr/local/bin/ruleshelf-frontend.sh
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/ruleshelf-frontend.sh"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 

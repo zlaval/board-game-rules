@@ -20,7 +20,6 @@ export function useVoice(
   const generation = useRef(0);
   const pending = useRef(false);
   const supported =
-    window.isSecureContext &&
     !!navigator.mediaDevices?.getUserMedia &&
     typeof MediaRecorder !== "undefined";
 

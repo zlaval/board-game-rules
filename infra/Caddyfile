@@ -1,6 +1,6 @@
 :80 {
     request_body {
-        max_size 52MB
+        max_size {$MAX_REQUEST_BODY_BYTES:211812352}
     }
     handle /api/* {
         reverse_proxy api:8000

@@ -3,7 +3,7 @@ name: board-game-rules
 x-app-environment: &app-environment
   DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Run setup first}@postgres:5432/rules
   DATA_DIR: /data
-  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
   MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-6-luna}
@@ -68,6 +68,8 @@ services:
     stop_grace_period: 20s
 
   frontend:
+    environment:
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
     build:
       context: ..
       dockerfile: infra/Dockerfile.frontend
