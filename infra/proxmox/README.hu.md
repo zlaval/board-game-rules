@@ -1,90 +1,53 @@
-# Proxmox-telepítés
+# Telepítés Proxmox VM-be
 
 [English](README.md) · [Magyar](README.hu.md)
 
-A Szabálytár külön Ubuntu Server 24.04 LTS virtuális gépben fut.
-A Docker a VM-be kerül, a Proxmox gazdagépre nem kell telepíteni.
+A Szabálytárat külön Ubuntu Server 24.04 LTS virtuális gépben futtasd. A Docker a VM-be kerül. Az alábbi mappa és erőforrásméretek példák; a saját szerveredhez válassz megfelelő értékeket.
 
-## Telepített gép
+## A virtuális gép előkészítése
 
-| Beállítás | Érték |
-| --- | --- |
-| Proxmox | `pve`, `192.168.1.100`, Proxmox VE 9.1.1 |
-| VM | `103`, `ruleshelf`, a gazdagéppel együtt indul |
-| Operációs rendszer | Ubuntu Server 24.04 LTS |
-| Erőforrások | 4 CPU, 4 GiB RAM, 80 GiB lemez, 2 GiB swap |
-| Tároló / hálózati híd | `local-lvm` / `vmbr0` |
-| IP-cím | DHCP: `192.168.1.79` |
-| MAC-cím DHCP-foglaláshoz | `BC:24:11:26:D6:EE` |
-| Alkalmazás mappája | `/opt/ruleshelf` |
-| SSH-felhasználó | `ubuntu`, kulcsos belépés és sudo |
-| Feldolgozó | CPU; a szerveren Intel UHD 620 van, támogatott NVIDIA GPU nincs |
-| Időzóna | `Europe/Budapest` |
+Ellenőrizd a szabad CPU-t, memóriát, tárhelyet, hálózati hidakat és VM-azonosítókat. Kiindulásnak 4 vCPU, 4 GiB RAM és 80 GiB lemez használható; az OCR igénye a dokumentumoktól függ. Válassz szabad VM-azonosítót és meglévő hálózati hidat, használj SSH-kulcsot és QEMU Guest Agentet. Igény szerint engedélyezd a gazdagéppel együtt indulást, a routerben pedig foglald le a VM DHCP-címét.
 
-A routerben érdemes a MAC-címhez lefoglalni a `192.168.1.79` címet.
-A játékosfelület: `http://192.168.1.79:8080`, az admin: `http://192.168.1.79:8080/admin`.
+Cloud image használatakor hivatalos Ubuntu-képfájlt tölts le, ellenőrizd az ellenőrzőösszegét, importáld a lemezét, és állíts be Cloud-Init meghajtót a saját SSH-kulcsoddal és hálózati adataiddal. GPU-hoz PCI-átadás, vendég NVIDIA-illesztőprogram és NVIDIA Container Toolkit is szükséges. CPU-feldolgozáshoz nincs szükség GPU-beállításra.
 
-## Új telepítés
+## Előre elkészített képfájlok telepítése
 
-Előbb ellenőrizd a Proxmox erőforrásait, a szabad VM-azonosítót, a tárolót,
-a hálózati hidat és a GPU-hozzárendeléseket. Hivatalos Ubuntu cloud image-ből,
-ellenőrzött SHA-256-tal hozz létre VM-et, Cloud-Init meghajtóval, SSH-kulccsal,
-engedélyezett QEMU Guest Agenttel és automatikus indulással. A meglévő vendégek
-hozzárendeléseit hagyd meg. A gép kezdetben DHCP-t használhat.
-
-Másold a projektet a VM `/opt/ruleshelf` mappájába, a `.git`, `node_modules`,
-tesztkimenetek és `.env` nélkül. A telepítőt **az Ubuntu VM-ben** futtasd:
+Klónozd a tárolót egy választott mappába, például az `/opt/ruleshelf` alá. A telepítőt **az Ubuntu VM-ben** futtasd:
 
 ```sh
 sudo sh /opt/ruleshelf/infra/proxmox/bootstrap-ubuntu.sh
-cd /opt/ruleshelf
-sudo sh infra/setup.sh
-sudo sed -i 's/^APP_BIND_ADDRESS=.*/APP_BIND_ADDRESS=0.0.0.0/' infra/.env
-sudo sh infra/proxmox/start-cpu.sh
+cd /opt/ruleshelf/release
+sudo cp .env.example .env
+sudo chmod 600 .env
+sudoedit .env
 ```
 
-A telepítő a Docker hivatalos Ubuntu tárolójából telepíti az Engine-t,
-a Buildxet, a Compose-t és a vendégügynököt. A CPU-indító a
-`compose.cpu.yaml` fájllal CPU PyTorch-ot épít, így a CUDA-függőségeket nem
-kell letölteni. Ezt az override-ot ne kombináld a GPU-s Compose fájllal.
-NVIDIA GPU-s gépen a fő README szerinti `infra/start.sh` indítót használd.
-
-Az `infra/.env` legyen csak root által olvasható (`chmod 600`). Az OpenAI-kulcs
-külön, SSH-n vihető át: a `set-openai-key.py` egyetlen `OPENAI_API_KEY=` sort
-fogad a standard bemeneten, nem írja ki a titkot, és atomikusan frissíti a
-konfigurációt. A modell alapértelmezése `gpt-6-luna`.
-
-## Meglévő könyvtár átvitele
-
-A forrás API-jának és workerének szüneteltetése alatt készíts PostgreSQL
-`pg_dump` mentést, és archiváld a dokumentumvolume-ot. A modellcache is
-átvihető az újabb letöltések elkerüléséhez. Az eredeti adatokat őrizd meg.
-A visszaállítás az új VM üres volume-jaiba történjen, az API és worker indulása
-előtt. Logikai adatbázis-visszaállításnál az új VM saját adatbázis-jelszava
-használható. Mentéshez az adatbázist, dokumentumokat és konfigurációt együtt
-őrizd meg.
-
-## Indítás, frissítés és ellenőrzés
+Add meg a saját `POSTGRES_PASSWORD` értékedet, szükség esetén az `OPENAI_API_KEY` kulcsot, megbízható LAN-eléréshez pedig az `APP_BIND_ADDRESS=0.0.0.0` beállítást. Ezután:
 
 ```sh
-ssh ubuntu@192.168.1.79
-cd /opt/ruleshelf
-sudo sh infra/proxmox/start-cpu.sh
-sudo docker compose --env-file infra/.env -f infra/compose.yaml -f infra/compose.cpu.yaml ps
+sudo docker compose up -d
+sudo docker compose ps
 curl --fail http://127.0.0.1:8080/api/health
 ```
 
-A Docker a VM indulásakor elindul; a konténerek `unless-stopped` beállítással
-újraindulnak. Leállításhoz ugyanezekkel a Compose fájlokkal használd a `down`
-parancsot, `-v` nélkül, hogy az adatok megmaradjanak.
+A telepítő a Docker hivatalos Ubuntu tárolójából telepíti az Engine-t, a Buildxet, a Compose-t és a vendégügynököt. A kiadás kész CPU-képfájlokat tölt le, és nem tartalmaz tesztszolgáltatásokat. Az NVIDIA-változatot és a frissítést a [kiadási útmutató](../../release/README.hu.md) írja le.
 
-Ellenőrizd az admin- és kérdezőfelületet, valamint átvitt adatok esetén a
-közzétett könyvtárat. Ehhez nem kell OCR-t vagy fizetős AI-hívást indítani.
-Az alaptelepítés HTTP-t használ; mobilos mikrofonhoz külön megbízható HTTPS
-szükséges. Az admin bejelentkezés nélkül érhető el az otthoni hálózaton.
+A felületek a `http://<vm-ip>:8080` és `http://<vm-ip>:8080/admin` címeken érhetők el. Nincs bejelentkezés, ezért megbízható hálózaton használd. Telefonos mikrofonhoz a telefon által megbízhatónak elfogadott tanúsítvánnyal rendelkező HTTPS-közvetítőt állíts be. Az alap Compose HTTP-t szolgál ki.
+
+## Forrásból építés
+
+Fejlesztéshez a tároló gyökeréből futtatott `sudo sh infra/proxmox/start-cpu.sh` CPU-függőségekkel épít. A `sudo sh infra/start.sh` CUDA-képes feldolgozót épít, és ellenőrzi a GPU-hozzáférést. Ezek az `infra/.env` fájlt és a kiadástól eltérő Compose-projektet használnak. Lásd a [fejlesztési és tesztelési útmutatót](../../docs/development.md); a két beállítás közötti váltás nem másolja át az adatokat.
+
+## Adatok és karbantartás
+
+Az adatbázist, a dokumentumkötetet és a privát konfigurációt együtt mentsd. Költözéshez az API írásainak és a háttérfeldolgozásnak a szüneteltetése alatt készíts összetartozó mentést. A modellcache átmásolható vagy újra letölthető. A visszaállítás üres célkötetekbe, az API és a worker indulása előtt történjen; az eredeti mentést a sikeres ellenőrzésig őrizd meg.
+
+Frissítéskor maradjon ugyanaz a telepítési mappa és projektnév. Tartsd meg a `.env` fájlt, frissítsd a kiadás fájljait és a `RULESHELF_VERSION` értékét, majd a kiadás mappájában futtasd a `sudo docker compose pull` és `sudo docker compose up -d` parancsot. NVIDIA használatakor add meg a `-f compose.yaml -f compose.gpu.yaml` kapcsolókat is.
+
+A Docker a VM-mel indul, az alkalmazás konténerei `unless-stopped` beállítást használnak. A `sudo docker compose down` megőrzi a köteteket, a `down -v` viszont törli a gyűjteményt. Telepítés vagy visszaállítás után ellenőrizd a szolgáltatásokat, a két felületet és a közzétett könyvtárat.
 
 ## Hivatkozások
 
 - [Proxmox Cloud-Init](https://pve.proxmox.com/wiki/Cloud-Init_Support)
 - [Docker Engine Ubuntu alatt](https://docs.docker.com/engine/install/ubuntu/)
-- [Az alkalmazás dokumentációja](../../README.hu.md)
+- [Az alkalmazás beállításai](../../README.hu.md)

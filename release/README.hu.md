@@ -6,7 +6,7 @@
 
 Ezzel a csomaggal az előre elkészített Docker-képfájlokból indíthatod el a Szabálytárat. Egy **x86-64 (AMD64) architektúrájú számítógépre**, Linux-konténereket futtató Dockerre és a Compose v2-re van szükséged. Windows alatt a Docker Desktop WSL2-alapú működését használhatod. Az alapértelmezett feldolgozó a gép processzorán fut, ezért videokártya nem szükséges. A forráskódot sem kell lefordítanod, és Node.js-t vagy Pythont sem kell telepítened.
 
-1. Csomagold ki a `ruleshelf-0.1.0.zip` fájlt egy külön mappába. Ebben megtalálod a kitöltendő `.env` fájlt is. Ha a projekt Git-tárolójából másoltad a `release` mappát, előbb készíts másolatot a `.env.example` fájlról `.env` néven. Linuxon és macOS-en erre a `cp .env.example .env`, PowerShellben a `Copy-Item .env.example .env` parancs használható.
+1. Csomagold ki a `ruleshelf-0.1.1.zip` fájlt egy külön mappába. Ebben megtalálod a kitöltendő `.env` fájlt is. Ha a projekt Git-tárolójából másoltad a `release` mappát, előbb készíts másolatot a `.env.example` fájlról `.env` néven. Linuxon és macOS-en erre a `cp .env.example .env`, PowerShellben a `Copy-Item .env.example .env` parancs használható.
 2. Nyisd meg a `.env` fájlt. A `POSTGRES_PASSWORD` mezőbe írj egy saját, véletlenszerű jelszót, amely legalább 32 karakterből áll. Csak az angol ábécé betűit, számokat, aláhúzást (`_`) és kötőjelet (`-`) használj. Az `OPENAI_API_KEY` mezőbe a saját OpenAI-kulcsodat írhatod. Ha ezt üresen hagyod, a dokumentumok feldolgozása és a helyi kulcsszavas keresés akkor is működik.
 3. Nyiss egy terminált a kicsomagolt mappában, majd futtasd az alábbi parancsot:
 
@@ -18,6 +18,8 @@ A Docker letölti a kiválasztott kiadáshoz tartozó nyilvános képfájlokat a
 
 Az első PDF vagy kép feldolgozásakor további modellek töltődhetnek le. Ezeket az alkalmazás megőrzi a későbbi használathoz. A sikeresen feldolgozott szabályok automatikusan megjelennek a keresőben, külön jóváhagyásra nincs szükség.
 
+A telepítési csomag csak az adatbázist, az API-t, a feldolgozót és a webes felületet tartalmazza. A fejlesztői és e2e-eszközök külön, a forráskódban érhetők el.
+
 ## Saját beállítások
 
 A kiadási csomag `.env` fájljában nincs API-kulcs vagy előre beállított adatbázisjelszó. Az adatbázisjelszót neked kell megadnod, az API-kulcs csak az OpenAI-funkciókhoz szükséges. A kitöltött fájlt őrizd meg, és ne oszd meg másokkal.
@@ -25,6 +27,8 @@ A kiadási csomag `.env` fájljában nincs API-kulcs vagy előre beállított ad
 Az alkalmazás automatikusan beolvassa a `.env` beállításait. Ha a gépeden a 8080-as portot már más szolgáltatás használja, az `APP_PORT` mezőben adj meg egy másik portot. A beállítások módosítása után futtasd újra a `docker compose up -d` parancsot.
 
 Az OpenAI-magyarázatokhoz, a fordításhoz, a jelentésalapú kereséshez és a beszédfelismeréshez saját, érvényes API-kulcs szükséges. Ezek a szolgáltatások költséggel járhatnak. API-kulcs nélkül az eredeti szabályok feldolgozása és helyi keresése használható.
+
+A `MAX_UPLOAD_MB` alapértéke `200`; ez az API és a webes közvetítő korlátját is beállítja. A feltöltési ablak az aktuális értéket mutatja. A `MAX_DOCUMENT_PAGES` alapértéke `100`. Módosítás után futtasd újra a `docker compose up -d` parancsot. A 0.1.0-ról frissítve állítsd át a `MAX_UPLOAD_MB=200` értéket, ha a megőrzött `.env` fájlban még a korábbi 50 MB szerepel.
 
 ### Elérés az otthoni hálózatról
 
@@ -87,11 +91,11 @@ Ez a parancs a CUDA-t támogató, nagyobb méretű feldolgozó képfájlját tö
 
 ## A kiadáshoz tartozó Docker-képfájlok
 
-| Összetevő | A 0.1.0-s kiadás képfájlja |
+| Összetevő | A 0.1.1-s kiadás képfájlja |
 | --- | --- |
-| API | `zalerix/ruleshelf-api:0.1.0` |
-| Webes felület | `zalerix/ruleshelf-frontend:0.1.0` |
-| Feldolgozó videokártya nélkül | `zalerix/ruleshelf-worker:0.1.0-cpu` |
-| Feldolgozó NVIDIA-videokártyához | `zalerix/ruleshelf-worker:0.1.0-cuda` |
+| API | `zalerix/ruleshelf-api:0.1.1` |
+| Webes felület | `zalerix/ruleshelf-frontend:0.1.1` |
+| Feldolgozó videokártya nélkül | `zalerix/ruleshelf-worker:0.1.1-cpu` |
+| Feldolgozó NVIDIA-videokártyához | `zalerix/ruleshelf-worker:0.1.1-cuda` |
 
 Ez a kiadás `linux/amd64` platformra készült. Natív ARM64-támogatást nem tartalmaz. Az adatbázishoz a `pgvector/pgvector:pg17` képfájlt használja, amelynek pontos változatát a Compose-fájl egyedi tartalomazonosítóval rögzíti.

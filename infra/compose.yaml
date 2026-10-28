@@ -80,37 +80,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  tests:
-    profiles: ["test"]
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.test
-    environment:
-      <<: *app-environment
-      DATA_DIR: /tmp/test-data
-      OPENAI_API_KEY: ""
-    depends_on:
-      api:
-        condition: service_healthy
-
-  e2e:
-    profiles: ["e2e"]
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.e2e
-    environment:
-      BASE_URL: http://frontend
-    volumes:
-      - ../test-results:/results
-    depends_on:
-      frontend:
-        condition: service_started
-      worker:
-        condition: service_started
-    init: true
-    shm_size: 256mb
-
-
 volumes:
   database:
   documents:

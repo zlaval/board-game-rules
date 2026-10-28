@@ -57,7 +57,7 @@ try {
   const main = await fixture(title, rules)
   const other = await fixture(`${title} Other edition`, '# Courier\n\nThe courier may teleport to Mars.')
   const draft = await fixture(`${title} Draft`, '# Secret\n\nUnpublished rules must not appear.', false)
-  assert.equal((await context.request.get(`${base}/api/games`)).status(), 401)
+  assert.equal((await context.request.get(`${base}/api/games`)).status(), 200, 'Library management is available without login on a trusted network')
   const realCapabilities = await api('/play/capabilities')
   // Never spend real provider credits from browser checks, even on a configured deployment.
   await page.route('**/api/play/capabilities', route => route.fulfill({ json: { explanations: false, transcription: false, max_audio_bytes: 10485760 } }))

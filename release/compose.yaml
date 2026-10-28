@@ -3,7 +3,7 @@ name: ruleshelf
 x-app-environment: &app-environment
   DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Fill POSTGRES_PASSWORD in .env}@postgres:5432/rules
   DATA_DIR: /data
-  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
   MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   OPENAI_ANSWER_MODEL: ${OPENAI_ANSWER_MODEL:-gpt-6-luna}
@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: zalerix/ruleshelf-api:${RULESHELF_VERSION:-0.1.0}
+    image: zalerix/ruleshelf-api:${RULESHELF_VERSION:-0.1.1}
     environment:
       <<: *app-environment
       OPENAI_TRANSCRIPTION_MODEL: ${OPENAI_TRANSCRIPTION_MODEL:-gpt-transcribe}
@@ -48,7 +48,7 @@ services:
     init: true
 
   worker:
-    image: zalerix/ruleshelf-worker:${RULESHELF_VERSION:-0.1.0}-cpu
+    image: zalerix/ruleshelf-worker:${RULESHELF_VERSION:-0.1.1}-cpu
     environment:
       <<: *app-environment
       PROCESSING_DEVICE: cpu
@@ -63,7 +63,9 @@ services:
     stop_grace_period: 20s
 
   frontend:
-    image: zalerix/ruleshelf-frontend:${RULESHELF_VERSION:-0.1.0}
+    image: zalerix/ruleshelf-frontend:${RULESHELF_VERSION:-0.1.1}
+    environment:
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
     depends_on:

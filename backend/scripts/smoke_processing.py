@@ -104,7 +104,7 @@ def main():
             current = next(d for d in documents if d["id"] == document["id"])
             if current["status"] == "failed":
                 raise RuntimeError(f"{filename}: {current['error']}")
-            if current["status"] == "ready":
+            if current["status"] == "published":
                 preview = request(f"/versions/{current['version_id']}/preview")
                 content = " ".join(c["content"] for c in preview["chunks"]).lower()
                 assert "cards" in content, content

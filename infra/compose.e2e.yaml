@@ -1,0 +1,48 @@
+# Test-only overlay. Combine with infra/compose.yaml or release/compose.yaml.
+# Use a separate project (-p ruleshelf-e2e) to isolate all test data.
+services:
+  api:
+    environment:
+      OPENAI_API_KEY: ""
+
+  worker:
+    environment:
+      OPENAI_API_KEY: ""
+    volumes:
+      - ../backend/scripts:/app/scripts:ro
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:${E2E_PORT:-18080}:80"
+
+  tests:
+    profiles: ["test"]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql://rules:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/rules
+      DATA_DIR: /tmp/test-data
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      MAX_DOCUMENT_PAGES: ${MAX_DOCUMENT_PAGES:-100}
+      OPENAI_API_KEY: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  e2e:
+    profiles: ["e2e"]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.e2e
+    environment:
+      BASE_URL: http://frontend
+    volumes:
+      - ../test-results:/results
+    depends_on:
+      frontend:
+        condition: service_started
+      worker:
+        condition: service_started
+    init: true
+    shm_size: 256mb

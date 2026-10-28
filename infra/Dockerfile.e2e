@@ -1,7 +1,15 @@
+FROM node:22-alpine AS ui
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM mcr.microsoft.com/playwright:v1.63.0-noble
 WORKDIR /tests
 COPY e2e/package*.json ./
 RUN npm ci
 COPY e2e/*.mjs ./
+COPY --from=ui /app/dist /ui
 CMD ["npm", "test"]
 
